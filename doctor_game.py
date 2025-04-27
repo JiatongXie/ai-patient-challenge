@@ -120,16 +120,18 @@ PATIENT_SYSTEM_MESSAGE = """
 请真实地扮演一个病人，使用自然的语言描述自己的症状。
 回复应当简洁、符合病人的身份，避免过于专业的医学术语。
 
-当你需要了解更多自己的身体状况时，你可以询问身体。在这种情况下，请在消息前加上"[询问身体]:"，
-后面跟着具体的问题，例如：
-"[询问身体]: 我的关节痛是什么感觉？"
-"[询问身体]: 我的头疼是持续性的还是间歇性的？"
+当你需要了解更多自己的身体状况时，你可以询问身体。在这种情况下，请使用格式：
+"[询问身体:你的具体问题]"
+例如：
+"[询问身体:我的关节痛是什么感觉？]"
+"[询问身体:我的头疼是持续性的还是间歇性的？]"
 
 请记住：
 1. 你不知道自己的疾病名称
 2. 你只知道自己的感受和症状
 3. 如果医生说出疾病名称，你不会知道它是否正确
-4. 询问身体时，你将获得更准确的症状描述
+4. 询问身体后，你将获得更准确的症状描述，你需要将这些症状自然地融入到对医生的简短回复中
+5. 你的回复应当简短直接，不要包含询问身体的内容
 """
 
 # 身体角色提示系统消息
@@ -187,11 +189,13 @@ def patient_node(state: GameState) -> Dict:
 
 {body_response}
 
-请基于这些身体感受，以病人的身份回复医生。不要提及你"询问身体"这一行为，直接将身体反馈的症状自然地融入到你的回复中。
-确保你的回复:
-1. 只描述症状，不包含医学诊断
-2. 使用普通人的语言，避免专业术语
-3. 自然、真实地表达你的感受和担忧
+请基于这些身体感受，以病人的身份简短地回复医生。你的回复必须：
+1. 简短直接，不超过4-5句话
+2. 只描述症状，不包含医学诊断
+3. 使用普通人的语言，避免专业术语
+4. 自然、真实地表达你的感受和担忧
+5. 不要提及你"询问身体"这一行为
+6. 不要复述全部身体反馈，只选择最重要的症状
 """
         content = invoke_llm(special_prompt, PATIENT_SYSTEM_MESSAGE)
         
@@ -245,8 +249,9 @@ def patient_node(state: GameState) -> Dict:
     # 更新状态
     new_message = {"sender": "patient", "content": content}
     
-    # 检查是否需要询问身体
-    if "[询问身体]:" in content:
+    # 检查是否需要询问身体 - 更新格式匹配
+    inquiry_match = "[询问身体:" in content
+    if inquiry_match:
         print("病人询问身体")
         return {
             "messages": messages + [new_message],
@@ -269,8 +274,18 @@ def body_node(state: GameState) -> Dict:
     messages = state["messages"]
     diagnosis = state.get("diagnosis", "")
     
-    # 获取病人的询问
-    patient_query = messages[-1]["content"].replace("[询问身体]:", "").strip()
+    # 获取病人的询问 - 更新格式匹配
+    patient_message = messages[-1]["content"]
+    
+    # 提取方括号内的内容
+    import re
+    inquiry_match = re.search(r'\[询问身体:(.*?)\]', patient_message)
+    
+    if inquiry_match:
+        patient_query = inquiry_match.group(1).strip()
+    else:
+        # 兼容旧格式
+        patient_query = patient_message.replace("[询问身体]:", "").strip()
     
     # 构建提示
     formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages])
@@ -347,6 +362,20 @@ def system_node(state: GameState) -> Dict:
     
     # 只对病人消息进行合理性检查
     if current_message["sender"] == "patient":
+        # 先检查并移除[询问身体:xxx]格式
+        import re
+        
+        # 清理掉询问身体的内容以便展示给玩家
+        content = current_message["content"]
+        cleaned_content = re.sub(r'\[询问身体:.*?\]', '', content).strip()
+        
+        # 如果内容有变化，说明包含了询问身体，需要更新消息
+        if cleaned_content != content:
+            # 创建修正后的消息，替换原来的消息
+            current_message["content"] = cleaned_content
+            # 更新消息列表中的最后一条消息
+            messages[-1] = current_message
+        
         # 构建提示
         formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages[:-1]])
         prompt = system_prompt.format(
@@ -380,6 +409,7 @@ def system_node(state: GameState) -> Dict:
 2. 只描述症状、感受
 3. 使用普通人能理解的语言
 4. 移除任何[询问身体]的标记
+5. 回复简短直接，不超过4-5句话
 """
             # 生成修正后的病人回复
             fixed_content = invoke_llm(fix_prompt, PATIENT_SYSTEM_MESSAGE + "\n请确保生成合理的病人回复，避免之前的问题。")

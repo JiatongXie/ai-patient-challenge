@@ -5,6 +5,7 @@ import json
 import uuid
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+import re
 
 from game_engine import (
     patient_node,
@@ -129,8 +130,21 @@ def send_message():
     # 病人回合
     patient_state = patient_node(system_state)
     
-    # 如果病人要询问身体
+    # 检查患者是否询问身体 - 使用更新的检测方式
     if patient_state.get("current_sender") == "body":
+        # 记录最后一条患者消息用于日志
+        for msg in patient_state["messages"]:
+            if msg["sender"] == "patient":
+                patient_message = msg["content"]
+                # 提取询问身体的内容
+                inquiry_match = re.search(r'\[询问身体:(.*?)\]', patient_message)
+                if inquiry_match:
+                    api_logs[game_id].append(f"患者询问身体: {inquiry_match.group(1)}")
+                else:
+                    # 兼容旧格式
+                    api_logs[game_id].append(f"患者询问身体: {patient_message.replace('[询问身体]:', '').strip()}")
+                break
+                
         # 调用身体节点
         body_state = body_node(patient_state)
         
@@ -141,6 +155,12 @@ def send_message():
         
         # 使用更新后的patient_node处理body回复
         patient_state = patient_node(body_state)
+        
+        # 记录患者基于身体感知的最终回复
+        for msg in patient_state["messages"]:
+            if msg["sender"] == "patient" and msg not in body_state["messages"]:
+                api_logs[game_id].append(f"患者基于身体感知的回复: {msg['content']}")
+                break
     
     # 系统验证病人消息
     final_state = system_node(patient_state)
@@ -148,7 +168,7 @@ def send_message():
     # 更新游戏状态
     active_games[game_id] = final_state
     
-    # 返回更新后的消息
+    # 返回更新后的消息 - 确保移除了询问身体的内容
     return jsonify({
         "messages": [msg for msg in final_state["messages"] if msg["sender"] != "body"],
         "current_sender": final_state.get("current_sender"),
