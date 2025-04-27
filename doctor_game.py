@@ -68,12 +68,17 @@ system_prompt = PromptTemplate.from_template("""
 当前消息: {current_message}
 发送者: {sender}
 
-请检查这条消息是否合理、是否符合发送者的角色。
+如果发送者是病人，请检查这条消息是否合理、是否符合病人的角色。
+如果发送者是医生，医生由玩家扮演，不要评判其回复的合理性，只判断其诊断是否正确。
 判断医生的诊断是否正确（正确的诊断是：{diagnosis}）。
 
 请按以下格式回复:
+发送者为病人时:
 合理性: [合理/不合理]
 原因: [如果不合理，请说明原因]
+
+发送者为医生时:
+诊断: [未给出诊断/诊断不正确/诊断正确]
 """)
 
 # 病人角色提示系统消息
@@ -124,6 +129,8 @@ SYSTEM_REFEREE_MESSAGE = """
 - 医生只是列举可能性（"可能是关节炎或肺炎"）
 - 医生使用模糊的描述而非明确疾病名
 - 医生说出完全不同的疾病名称
+
+重要：医生由玩家扮演，你不应该评判医生回复的合理性。你只能评判病人回复的合理性，以及医生的诊断是否正确。
 """
 
 # 定义节点函数
@@ -276,9 +283,10 @@ def system_node(state: GameState) -> Dict:
     
     result_state = {}
     
-    if not is_reasonable:
-        # 移除不合理的消息，让发送者重试
-        print(f"系统判断消息不合理: {system_response}")
+    # 对于病人的消息，仍然检查合理性
+    if not is_reasonable and current_message["sender"] == "patient":
+        # 只对病人消息进行合理性检查，要求病人重试
+        print(f"系统判断病人消息不合理: {system_response}")
         result_state = {
             "messages": messages[:-1] + [{"sender": "system", "content": f"请重新回复，原因: {system_response}"}],
             "current_sender": current_message["sender"],
@@ -286,22 +294,22 @@ def system_node(state: GameState) -> Dict:
             "game_over": False,
             "system_notes": system_response  # 保存系统的思考过程
         }
+    elif current_message["sender"] == "doctor":
+        # 医生（玩家）的消息不进行合理性评判，直接轮到病人回复
+        print("医生消息已接收，轮到病人")
+        result_state = {
+            "messages": messages,
+            "current_sender": "patient", 
+            "diagnosis": diagnosis,
+            "game_over": False,
+            "system_notes": "医生消息已接收，不进行合理性评判"  # 更新系统笔记
+        }
     elif current_message["sender"] == "patient":
         # 如果病人的回复合理，轮到医生回复
         print("病人消息已确认，轮到医生")
         result_state = {
             "messages": messages,
             "current_sender": "doctor",
-            "diagnosis": diagnosis,
-            "game_over": False,
-            "system_notes": system_response  # 保存系统的思考过程
-        }
-    elif current_message["sender"] == "doctor":
-        # 如果医生的回复合理，轮到病人回复
-        print("医生消息已确认，轮到病人")
-        result_state = {
-            "messages": messages,
-            "current_sender": "patient", 
             "diagnosis": diagnosis,
             "game_over": False,
             "system_notes": system_response  # 保存系统的思考过程
