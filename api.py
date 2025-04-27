@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import json
@@ -17,14 +17,33 @@ from game_engine import (
     SYSTEM_REFEREE_MESSAGE
 )
 
-app = Flask(__name__)
-CORS(app)  # 允许跨域请求
+app = Flask(__name__, static_folder='frontend/build')
+
+# 更彻底的CORS配置
+CORS(app)
+
+# 添加CORS响应头的处理器
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # 存储游戏状态的字典
 active_games = {}
 
 # 存储API日志
 api_logs = {}
+
+# 前端路由处理
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and os.path.exists(os.path.join('frontend/build', path)):
+        return send_from_directory('frontend/build', path)
+    else:
+        return send_from_directory('frontend/build', 'index.html')
 
 @app.route('/api/new_game', methods=['POST'])
 def new_game():

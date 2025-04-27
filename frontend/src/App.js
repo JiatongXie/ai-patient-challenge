@@ -6,8 +6,8 @@ import MessageInput from "./components/MessageInput";
 import GameHeader from "./components/GameHeader";
 import GameControls from "./components/GameControls";
 
-const API_BASE =
-  process.env.NODE_ENV === "production" ? "http://localhost:5000" : "";
+// 使用固定地址
+const API_BASE = "http://127.0.0.1:5000";
 
 const Container = styled.div`
   display: flex;
