@@ -229,9 +229,13 @@ def system_node(state: GameState) -> Dict:
     current_message = messages[-1]
     
     # 检查是否是医生消息，以及是否可能包含诊断
+    diagnosis_result = None
     if current_message["sender"] == "doctor":
-        # 构建特殊提示来检查诊断是否正确
-        diagnosis_prompt = f"""
+        # 检查是否包含疾病名称或诊断相关词语
+        message_text = current_message["content"].lower()
+        if (diagnosis.lower() in message_text) or any(term in message_text for term in ["诊断", "判断", "认为", "确定", "可能是", "应该是", "我觉得是", "你有", "你患了"]):
+            # 构建特殊提示来检查诊断是否正确
+            diagnosis_prompt = f"""
 医生的消息: "{current_message['content']}"
 正确的诊断: "{diagnosis}"
 
@@ -239,19 +243,20 @@ def system_node(state: GameState) -> Dict:
 只有当医生明确指出正确疾病名称时才算正确，如果医生提到了错误的疾病，一定是不正确的。
 请以"诊断正确: [是/否]"开始你的回答，并解释理由。
 """
-        diagnosis_result = invoke_llm(diagnosis_prompt, "你是医学诊断评估专家，判断医生的诊断是否与标准诊断匹配。")
-        print(f"诊断评估: {diagnosis_result}")
-        
-        # 解析诊断结果
-        is_correct_diagnosis = "诊断正确: 是" in diagnosis_result
-        if is_correct_diagnosis:
-            print("游戏结束: 诊断正确")
-            return {
-                "messages": messages + [{"sender": "system", "content": f"恭喜！你正确诊断出了病人的疾病：{diagnosis}。"}],
-                "current_sender": "system",
-                "diagnosis": diagnosis, 
-                "game_over": True
-            }
+            diagnosis_result = invoke_llm(diagnosis_prompt, "你是医学诊断评估专家，判断医生的诊断是否与标准诊断匹配。")
+            print(f"诊断评估: {diagnosis_result}")
+            
+            # 解析诊断结果
+            is_correct_diagnosis = "诊断正确: 是" in diagnosis_result
+            if is_correct_diagnosis:
+                print("游戏结束: 诊断正确")
+                return {
+                    "messages": messages + [{"sender": "system", "content": f"恭喜！你正确诊断出了病人的疾病：{diagnosis}。"}],
+                    "current_sender": "system",
+                    "diagnosis": diagnosis, 
+                    "game_over": True,
+                    "system_notes": diagnosis_result  # 保存系统的思考过程
+                }
     
     # 构建提示
     formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages[:-1]])
@@ -268,36 +273,47 @@ def system_node(state: GameState) -> Dict:
     # 解析系统回复
     is_reasonable = "合理" in system_response
     
+    result_state = {}
+    
     if not is_reasonable:
         # 移除不合理的消息，让发送者重试
         print(f"系统判断消息不合理: {system_response}")
-        return {
+        result_state = {
             "messages": messages[:-1] + [{"sender": "system", "content": f"请重新回复，原因: {system_response}"}],
             "current_sender": current_message["sender"],
             "diagnosis": diagnosis,
-            "game_over": False
+            "game_over": False,
+            "system_notes": system_response  # 保存系统的思考过程
         }
     elif current_message["sender"] == "patient":
         # 如果病人的回复合理，轮到医生回复
         print("病人消息已确认，轮到医生")
-        return {
+        result_state = {
             "messages": messages,
             "current_sender": "doctor",
             "diagnosis": diagnosis,
-            "game_over": False
+            "game_over": False,
+            "system_notes": system_response  # 保存系统的思考过程
         }
     elif current_message["sender"] == "doctor":
         # 如果医生的回复合理，轮到病人回复
         print("医生消息已确认，轮到病人")
-        return {
+        result_state = {
             "messages": messages,
             "current_sender": "patient", 
             "diagnosis": diagnosis,
-            "game_over": False
+            "game_over": False,
+            "system_notes": system_response  # 保存系统的思考过程
         }
     else:
         # 其他情况
-        return state
+        result_state = state
+    
+    # 如果有诊断评估结果，添加到系统笔记中
+    if diagnosis_result:
+        result_state["diagnosis_evaluation"] = diagnosis_result
+    
+    return result_state
 
 def doctor_turn(state: GameState, config: Dict[str, Any] = None) -> Dict:
     """处理医生的输入"""
@@ -373,7 +389,13 @@ def build_game_graph(diagnosis: str):
     return game, initial_state
 
 # 保存对话历史
-def save_conversation(messages: List[Dict[str, Any]]):
+def save_conversation(messages: List[Dict[str, Any]], game_log: List[str] = None):
+    """保存对话历史和游戏日志
+    
+    Args:
+        messages: 对话消息列表
+        game_log: 游戏日志列表，包含系统思考、诊断评估等
+    """
     # 创建保存目录
     os.makedirs("conversations", exist_ok=True)
     
@@ -383,8 +405,33 @@ def save_conversation(messages: List[Dict[str, Any]]):
     
     # 写入文件
     with open(filename, "w", encoding="utf-8") as f:
+        # 写入标题
+        f.write("="*70 + "\n")
+        f.write(" "*20 + "AI问诊小游戏记录\n")
+        f.write("="*70 + "\n\n")
+        
+        # 写入对话历史
+        f.write("## 对话内容\n")
+        f.write("-"*70 + "\n\n")
         for msg in messages:
-            f.write(f"{msg['sender']}: {msg['content']}\n\n")
+            sender = msg["sender"].upper()
+            if sender == "PATIENT":
+                sender = "👤 病人"
+            elif sender == "DOCTOR":
+                sender = "👨‍⚕️ 医生"
+            elif sender == "BODY":
+                sender = "🫀 身体感知"
+            elif sender == "SYSTEM":
+                sender = "🎮 系统"
+            
+            f.write(f"{sender}：{msg['content']}\n\n")
+        
+        # 写入游戏日志（如果有）
+        if game_log and len(game_log) > 0:
+            f.write("\n\n## 游戏日志\n")
+            f.write("-"*70 + "\n\n")
+            for log in game_log:
+                f.write(log + "\n\n")
     
     return filename
 
@@ -402,9 +449,14 @@ def play_doctor_game():
         "高血压", "糖尿病", "关节炎", "哮喘", "过敏性鼻炎"
     ]
     
+    # 游戏日志，用于记录系统思考和评估过程
+    game_log = []
+    
     import random
     diagnosis = random.choice(diseases)
-    print(f"[调试] 本次游戏的疾病是: {diagnosis}")  # 调试信息，实际游戏中可注释掉
+    debug_msg = f"[调试] 本次游戏的疾病是: {diagnosis}"
+    print(debug_msg)  # 调试信息
+    game_log.append(debug_msg)
     
     game, initial_state = build_game_graph(diagnosis)
     state = initial_state
@@ -428,6 +480,7 @@ def play_doctor_game():
     # 首先生成病人的初始消息
     print("病人正在进入诊室...")
     patient_state = patient_node(state)
+    game_log.append("病人进入诊室，开始初次交流。")
     
     # 打印病人消息
     for msg in patient_state["messages"][-1:]:
@@ -452,13 +505,23 @@ def play_doctor_game():
                 
             # 处理医生输入
             doctor_state = doctor_turn(current_state, {"message": doctor_input})
+            game_log.append(f"医生消息: {doctor_input}")
             
             # 系统验证医生消息
             try:
                 system_state = system_node(doctor_state)
+                
+                # 记录系统评估
+                if "system_notes" in system_state:
+                    game_log.append(f"系统评估:\n{system_state['system_notes']}")
+                if "diagnosis_evaluation" in system_state:
+                    game_log.append(f"诊断评估:\n{system_state['diagnosis_evaluation']}")
+                
                 current_state = system_state
             except Exception as e:
-                print(f"处理医生消息时出错: {e}")
+                error_msg = f"处理医生消息时出错: {e}"
+                print(error_msg)
+                game_log.append(error_msg)
                 continue
                 
         elif current_state["current_sender"] == "patient":
@@ -466,11 +529,20 @@ def play_doctor_game():
             print("\n⏳ 病人正在思考...")
             try:
                 patient_state = patient_node(current_state)
+                patient_action = "直接回复"
                 
                 # 如果病人要询问身体
                 if patient_state["current_sender"] == "body":
                     print("\n🔍 病人正在感知身体状况...")
+                    patient_action = "询问身体"
+                    game_log.append("病人决定询问身体感受")
+                    
                     body_state = body_node(patient_state)
+                    
+                    # 记录身体感知内容
+                    for msg in body_state["messages"]:
+                        if msg["sender"] == "body":
+                            game_log.append(f"身体感知响应:\n{msg['content']}")
                     
                     # 显示身体反馈
                     for msg in body_state["messages"][-1:]:
@@ -480,9 +552,24 @@ def play_doctor_game():
                     # 病人收到身体信息后的回应
                     patient_state = patient_node(body_state)
                 
+                game_log.append(f"病人{patient_action}")
+                
+                # 记录病人消息
+                for msg in patient_state["messages"]:
+                    if msg["sender"] == "patient" and msg not in current_state["messages"]:
+                        game_log.append(f"病人消息: {msg['content']}")
+                
                 # 系统验证病人消息
                 system_state = system_node(patient_state)
+                
+                # 记录系统评估
+                if "system_notes" in system_state:
+                    game_log.append(f"系统评估:\n{system_state['system_notes']}")
+                
                 current_state = system_state
+                
+                verification_msg = "病人消息已确认，轮到医生" if current_state["current_sender"] == "doctor" else "系统处理病人消息"
+                game_log.append(verification_msg)
                 
                 # 打印病人消息
                 for msg in patient_state["messages"][-1:]:
@@ -490,7 +577,9 @@ def play_doctor_game():
                         print(f"\n👤 病人: {msg['content']}")
                     
             except Exception as e:
-                print(f"处理病人消息时出错: {e}")
+                error_msg = f"处理病人消息时出错: {e}"
+                print(error_msg)
+                game_log.append(error_msg)
                 # 如果出错，轮到医生
                 current_state["current_sender"] = "doctor"
         
@@ -500,17 +589,20 @@ def play_doctor_game():
             for msg in current_state["messages"]:
                 if msg["sender"] == "system" and "恭喜" in msg["content"]:
                     print(f"\n🎉 系统: {msg['content']}")
+                    game_log.append(f"游戏结束：{msg['content']}")
             break
     
     # 游戏结束
     print("\n" + "="*70)
     print(" "*20 + "游戏结束!")
     if any(msg["sender"] == "system" and "恭喜" in msg["content"] for msg in current_state["messages"]):
-        print(f"恭喜你成功诊断出病人的疾病: {diagnosis}")
+        end_msg = f"恭喜你成功诊断出病人的疾病: {diagnosis}"
+        print(end_msg)
+        game_log.append(end_msg)
     print("="*70)
     
     # 保存对话
-    filename = save_conversation(current_state["messages"])
+    filename = save_conversation(current_state["messages"], game_log)
     print(f"\n对话已保存至: {filename}")
 
 if __name__ == "__main__":
