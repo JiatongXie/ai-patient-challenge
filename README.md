@@ -42,7 +42,7 @@
 # OpenAI API配置
 ARK_API_KEY=your_api_key_here
 API_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-MODEL_ID=ep-20250221232531-6qwkh
+MODEL_ID=your_model_id
 ```
 
 请确保替换`ARK_API_KEY`为您的实际 API 密钥。
