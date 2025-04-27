@@ -1,6 +1,76 @@
 # AI 问诊小游戏
 
-这是一个使用 Python 和 LangGraph 开发的 AI 问诊小游戏。在游戏中，玩家扮演医生，需要通过询问病人的症状来正确诊断出病人的疾病。
+一个基于 LLM 的医生问诊游戏，玩家扮演医生通过询问与检查来诊断病人的疾病。
+
+## 项目结构
+
+```
+├── api.py              # Flask后端API
+├── game_engine.py      # 游戏核心逻辑
+├── doctor_game.py      # 原命令行版本游戏
+├── requirements.txt    # Python依赖
+├── dotenv.sample       # 环境变量模板
+└── frontend/           # React前端
+    ├── package.json      # 前端依赖
+    └── src/              # 前端源代码
+        ├── App.js          # 主应用组件
+        └── components/     # UI组件
+```
+
+## 技术栈
+
+- 后端：Python + Flask
+- 前端：React + Styled-Components
+- AI：基于 ARK API 的大语言模型
+
+## 安装与启动
+
+### 1. 安装后端依赖
+
+```bash
+# 创建环境变量文件
+cp dotenv.sample .env
+# 编辑.env文件，添加你的ARK API密钥
+
+# 安装依赖
+pip install -r requirements.txt
+```
+
+### 2. 安装前端依赖
+
+```bash
+cd frontend
+npm install
+```
+
+### 3. 启动后端服务
+
+```bash
+python api.py
+```
+
+### 4. 启动前端服务
+
+```bash
+cd frontend
+npm start
+```
+
+访问 http://localhost:3000 即可开始游戏
+
+## 游戏规则
+
+1. 你扮演一名医生，通过询问病人症状诊断疾病
+2. 病人会回答你的问题，有时可能会询问自己的身体感受（这会提供更详细的症状）
+3. 当你认为已经确定诊断时，直接告诉病人诊断结果（例如："你患有高血压"）
+4. 只有准确说出病名才算胜利
+
+## 游戏心得
+
+- 细心询问病人的症状和感受
+- 注意症状的组合和关联性
+- 系统性思考，逐步排除可能性
+- 耐心是好医生的美德！
 
 ## 游戏角色
 
