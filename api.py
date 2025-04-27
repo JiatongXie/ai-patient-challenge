@@ -56,9 +56,21 @@ def new_game():
     # 生成病人的初始消息
     patient_state = patient_node(initial_state)
     
+    # 确保初始消息不包含询问身体内容
+    for i, msg in enumerate(patient_state["messages"]):
+        if msg["sender"] == "patient":
+            # 清理可能的询问身体内容
+            cleaned_content = re.sub(r'\[询问身体:.*?\]', '', msg["content"]).strip()
+            if not cleaned_content:
+                cleaned_content = "医生您好，我最近感觉身体不舒服，来看看是怎么回事。"
+            patient_state["messages"][i]["content"] = cleaned_content
+    
+    # 进行系统检查
+    system_checked_state = system_node(patient_state)
+    
     # 更新游戏状态
     active_games[game_id] = {
-        "messages": patient_state["messages"],
+        "messages": system_checked_state["messages"],
         "current_sender": "doctor",  # 轮到医生
         "diagnosis": diagnosis,
         "game_over": False
@@ -67,7 +79,7 @@ def new_game():
     # 返回游戏信息和初始消息
     response = {
         "game_id": game_id,
-        "messages": [msg for msg in patient_state["messages"] if msg["sender"] != "body"],
+        "messages": [msg for msg in system_checked_state["messages"] if msg["sender"] != "body"],
         "current_sender": "doctor",
         "game_over": False
     }
@@ -127,50 +139,96 @@ def send_message():
             "game_over": False
         })
     
-    # 病人回合
+    # 病人回合 - 生成病人回复
     patient_state = patient_node(system_state)
     
-    # 检查患者是否询问身体 - 使用更新的检测方式
+    # 检查患者是否询问身体
     if patient_state.get("current_sender") == "body":
-        # 记录最后一条患者消息用于日志
-        for msg in patient_state["messages"]:
+        last_patient_msg = None
+        
+        # 查找最后一条患者消息
+        for msg in reversed(patient_state["messages"]):
             if msg["sender"] == "patient":
-                patient_message = msg["content"]
-                # 提取询问身体的内容
-                inquiry_match = re.search(r'\[询问身体:(.*?)\]', patient_message)
-                if inquiry_match:
-                    api_logs[game_id].append(f"患者询问身体: {inquiry_match.group(1)}")
-                else:
-                    # 兼容旧格式
-                    api_logs[game_id].append(f"患者询问身体: {patient_message.replace('[询问身体]:', '').strip()}")
+                last_patient_msg = msg
                 break
+        
+        if last_patient_msg:
+            # 提取询问身体的内容（使用严格的格式匹配）
+            inquiry_match = re.search(r'\[询问身体:(.*?)\]', last_patient_msg["content"])
+            if inquiry_match and inquiry_match.group(1).strip():
+                api_logs[game_id].append(f"患者询问身体: {inquiry_match.group(1).strip()}")
+            else:
+                # 兼容旧格式，但确保不会记录普通消息
+                old_format = last_patient_msg["content"].replace("[询问身体]:", "").strip()
+                if "[询问身体]" in last_patient_msg["content"]:
+                    api_logs[game_id].append(f"患者询问身体: {old_format}")
+            
+            # 调用身体节点
+            body_state = body_node(patient_state)
+            
+            # 找到身体回复消息
+            body_msg = None
+            for msg in reversed(body_state["messages"]):
+                if msg["sender"] == "body":
+                    body_msg = msg
+                    break
+            
+            if body_msg and body_msg["content"].strip():
+                api_logs[game_id].append(f"身体感知响应:\n{body_msg['content']}")
                 
-        # 调用身体节点
-        body_state = body_node(patient_state)
-        
-        # 记录身体感知内容
-        for msg in body_state["messages"]:
-            if msg["sender"] == "body":
-                api_logs[game_id].append(f"身体感知响应:\n{msg['content']}")
-        
-        # 使用更新后的patient_node处理body回复
-        patient_state = patient_node(body_state)
-        
-        # 记录患者基于身体感知的最终回复
-        for msg in patient_state["messages"]:
-            if msg["sender"] == "patient" and msg not in body_state["messages"]:
-                api_logs[game_id].append(f"患者基于身体感知的回复: {msg['content']}")
-                break
+                # 使用更新后的patient_node处理body回复
+                final_patient_state = patient_node(body_state)
+                
+                # 找到基于身体感知生成的患者回复
+                new_patient_msg = None
+                for msg in reversed(final_patient_state["messages"]):
+                    if msg["sender"] == "patient" and msg not in body_state["messages"]:
+                        new_patient_msg = msg
+                        break
+                
+                if new_patient_msg and new_patient_msg["content"].strip():
+                    api_logs[game_id].append(f"患者基于身体感知的回复: {new_patient_msg['content']}")
+                
+                # 系统验证最终的病人消息
+                final_state = system_node(final_patient_state)
+                
+                # 更新游戏状态
+                active_games[game_id] = final_state
+                
+                # 过滤所有空白消息
+                messages_to_return = []
+                for msg in final_state["messages"]:
+                    if msg["sender"] != "body" and (not msg["sender"] == "patient" or msg["content"].strip()):
+                        messages_to_return.append(msg)
+                
+                # 返回更新后的消息
+                return jsonify({
+                    "messages": messages_to_return,
+                    "current_sender": final_state.get("current_sender"),
+                    "game_over": final_state.get("game_over", False)
+                })
+            else:
+                # 如果身体消息为空，回退到普通患者回复
+                patient_state["current_sender"] = "system"
+        else:
+            # 如果找不到患者消息，回退到普通处理
+            patient_state["current_sender"] = "system"
     
-    # 系统验证病人消息
+    # 如果没有询问身体或询问身体过程有问题，走普通流程
     final_state = system_node(patient_state)
     
     # 更新游戏状态
     active_games[game_id] = final_state
     
-    # 返回更新后的消息 - 确保移除了询问身体的内容
+    # 过滤所有空白消息和身体消息
+    messages_to_return = []
+    for msg in final_state["messages"]:
+        if msg["sender"] != "body" and (not msg["sender"] == "patient" or msg["content"].strip()):
+            messages_to_return.append(msg)
+    
+    # 返回更新后的消息
     return jsonify({
-        "messages": [msg for msg in final_state["messages"] if msg["sender"] != "body"],
+        "messages": messages_to_return,
         "current_sender": final_state.get("current_sender"),
         "game_over": final_state.get("game_over", False)
     })
