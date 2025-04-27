@@ -4,3 +4,9 @@ conversations/
 __pycache__/
 frontend/node_modules/
 frontend/build/
+.DS_Store
+frontend/package-lock.json
+.gitignore
+.DS_Store
+**/.DS_Store
+*/.DS_Store
