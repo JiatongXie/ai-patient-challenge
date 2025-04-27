@@ -6,6 +6,9 @@ import MessageInput from "./components/MessageInput";
 import GameHeader from "./components/GameHeader";
 import GameControls from "./components/GameControls";
 
+const API_BASE =
+  process.env.NODE_ENV === "production" ? "http://localhost:5000" : "";
+
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -41,7 +44,7 @@ function App() {
       setIsLoading(true);
       setError("");
 
-      const response = await axios.post("/api/new_game");
+      const response = await axios.post(`${API_BASE}/api/new_game`);
 
       setGameId(response.data.game_id);
       setMessages(response.data.messages);
@@ -70,7 +73,7 @@ function App() {
         { sender: "doctor", content: message },
       ]);
 
-      const response = await axios.post("/api/send_message", {
+      const response = await axios.post(`${API_BASE}/api/send_message`, {
         game_id: gameId,
         message: message,
       });
@@ -99,7 +102,9 @@ function App() {
       setIsLoading(true);
       setError("");
 
-      const response = await axios.post(`/api/save_conversation/${gameId}`);
+      const response = await axios.post(
+        `${API_BASE}/api/save_conversation/${gameId}`
+      );
 
       alert(`对话已保存至: ${response.data.filename}`);
     } catch (err) {
