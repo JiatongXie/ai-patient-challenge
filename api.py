@@ -228,8 +228,22 @@ def save_conversation(game_id):
         # 写入对话历史
         f.write("## 对话内容\n")
         f.write("-"*70 + "\n\n")
+        
+        # 清理病人消息中可能的询问身体内容
+        messages_to_save = []
         for msg in state["messages"]:
-            # 只显示医生、病人和最终的系统消息，跳过身体消息
+            if msg["sender"] == "patient":
+                # 复制消息以避免修改原始状态
+                new_msg = msg.copy()
+                # 清理询问身体内容
+                new_msg["content"] = re.sub(r'\[询问身体:.*?\]', '', new_msg["content"]).strip()
+                messages_to_save.append(new_msg)
+            elif msg["sender"] != "body":  # 排除身体消息
+                messages_to_save.append(msg)
+        
+        # 写入清理后的消息
+        for msg in messages_to_save:
+            # 只显示医生、病人和最终的系统消息
             if msg["sender"] in ["doctor", "patient"] or (msg["sender"] == "system" and "恭喜" in msg["content"]):
                 sender = msg["sender"].upper()
                 if sender == "PATIENT":

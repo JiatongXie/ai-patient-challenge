@@ -334,19 +334,22 @@ def system_node(state: GameState) -> Dict:
     
     # 只对病人消息进行合理性检查
     if current_message["sender"] == "patient":
-        # 先检查并移除[询问身体:xxx]格式
+        # 先检查并清理所有病人消息中的询问身体内容，不仅仅是最新消息
         import re
         
-        # 清理掉询问身体的内容以便展示给玩家
-        content = current_message["content"]
-        cleaned_content = re.sub(r'\[询问身体:.*?\]', '', content).strip()
+        # 清理消息列表中所有病人消息
+        for i, msg in enumerate(messages):
+            if msg["sender"] == "patient":
+                content = msg["content"]
+                cleaned_content = re.sub(r'\[询问身体:.*?\]', '', content).strip()
+                
+                # 只有当内容真的有变化时才更新
+                if cleaned_content != content:
+                    # 创建修正后的消息，替换原来的消息
+                    messages[i]["content"] = cleaned_content
         
-        # 如果内容有变化，说明包含了询问身体，需要更新消息
-        if cleaned_content != content:
-            # 创建修正后的消息，替换原来的消息
-            current_message["content"] = cleaned_content
-            # 更新消息列表中的最后一条消息
-            messages[-1] = current_message
+        # 更新当前消息引用，因为messages可能已经被修改
+        current_message = messages[-1]
         
         # 构建提示
         formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages[:-1]])
@@ -386,6 +389,10 @@ def system_node(state: GameState) -> Dict:
             
             # 创建修正后的消息，替换原来的消息
             fixed_message = {"sender": "patient", "content": fixed_content}
+            
+            # 确保最终的消息没有询问身体的内容
+            fixed_content = re.sub(r'\[询问身体:.*?\]', '', fixed_content).strip()
+            fixed_message["content"] = fixed_content
             
             return {
                 "messages": messages[:-1] + [fixed_message],  # 替换最后一条消息
