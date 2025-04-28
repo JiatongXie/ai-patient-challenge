@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import styled from "styled-components";
+import html2canvas from "html2canvas";
 import ChatMessage from "./components/ChatMessage";
 import MessageInput from "./components/MessageInput";
 import GameHeader from "./components/GameHeader";
@@ -98,7 +99,7 @@ function App() {
     }
   };
 
-  // 保存对话
+  // 保存对话为文本
   const saveConversation = async () => {
     if (!gameId) return;
 
@@ -144,6 +145,97 @@ function App() {
     }
   };
 
+  // 保存对话为图片
+  const saveConversationAsImage = async () => {
+    if (!gameId) return;
+
+    try {
+      setIsLoading(true);
+      setError("");
+
+      // 获取要截图的元素
+      const chatContainer = document.querySelector(".chat-container");
+      if (!chatContainer) {
+        throw new Error("找不到聊天容器元素");
+      }
+
+      // 创建一个临时容器，用于截图
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "absolute";
+      tempContainer.style.left = "-9999px";
+      tempContainer.style.width = "500px"; // 与原容器宽度相同
+      tempContainer.style.backgroundColor = "#ededed";
+      tempContainer.style.padding = "16px";
+
+      // 添加标题
+      const title = document.createElement("div");
+      title.style.textAlign = "center";
+      title.style.fontSize = "18px";
+      title.style.fontWeight = "bold";
+      title.style.marginBottom = "16px";
+      title.style.padding = "10px";
+      title.style.backgroundColor = "#07c160";
+      title.style.color = "white";
+      title.style.borderRadius = "4px";
+      title.innerText = "AI问诊对话记录";
+      tempContainer.appendChild(title);
+
+      // 复制聊天内容
+      const chatContent = chatContainer.cloneNode(true);
+      tempContainer.appendChild(chatContent);
+
+      // 添加时间戳
+      const timestamp = document.createElement("div");
+      timestamp.style.textAlign = "right";
+      timestamp.style.fontSize = "12px";
+      timestamp.style.color = "#999";
+      timestamp.style.marginTop = "16px";
+      const now = new Date();
+      timestamp.innerText = `保存时间: ${now.getFullYear()}-${(
+        now.getMonth() + 1
+      )
+        .toString()
+        .padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")} ${now
+        .getHours()
+        .toString()
+        .padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+      tempContainer.appendChild(timestamp);
+
+      // 添加到DOM
+      document.body.appendChild(tempContainer);
+
+      // 使用html2canvas截图
+      const canvas = await html2canvas(tempContainer, {
+        backgroundColor: "#ededed",
+        scale: 2, // 提高清晰度
+        logging: false,
+        useCORS: true,
+      });
+
+      // 移除临时容器
+      document.body.removeChild(tempContainer);
+
+      // 转换为图片并下载
+      const imgData = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = imgData;
+      link.download = `AI问诊记录_${now.getFullYear()}${(now.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}_${now
+        .getHours()
+        .toString()
+        .padStart(2, "0")}${now.getMinutes().toString().padStart(2, "0")}.png`;
+      link.click();
+
+      alert(`对话已保存为图片并开始下载`);
+    } catch (err) {
+      setError("保存对话为图片失败，请重试！");
+      console.error("保存对话为图片失败:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 自动滚动到最新消息
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -176,7 +268,7 @@ function App() {
         currentSender={currentSender}
       />
 
-      <ChatContainer ref={chatContainerRef}>
+      <ChatContainer ref={chatContainerRef} className="chat-container">
         {messages.map((message, index) => (
           <ChatMessage
             key={index}
@@ -205,6 +297,7 @@ function App() {
       <GameControls
         onNewGame={handleNewGame}
         onSaveConversation={saveConversation}
+        onSaveAsImage={saveConversationAsImage}
         gameOver={gameOver}
         disabled={isLoading}
       />
