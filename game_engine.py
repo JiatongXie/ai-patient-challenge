@@ -19,7 +19,7 @@ class GameState(TypedDict):
 
 # 创建OpenAI客户端
 client = OpenAI(
-    base_url=os.getenv("API_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
+    base_url=os.getenv("API_BASE_URL"),
     api_key=os.getenv("ARK_API_KEY"),
 )
 
@@ -33,7 +33,7 @@ def invoke_llm(prompt, system_message="你是一个AI助手"):
     
     # 调用API
     response = client.chat.completions.create(
-        model=os.getenv("MODEL_ID", "ep-20250221232531-6qwkh"),
+        model=os.getenv("MODEL_ID"),
         messages=[
             {"role": "system", "content": system_message},
             {"role": "user", "content": prompt}
