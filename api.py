@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 import re
 
+from config import GAME_CONFIG
 from game_engine import (
     patient_node,
     body_node,
@@ -133,14 +134,9 @@ def new_game():
         print(f"检测到重复的new_game请求，返回缓存的响应: {request_id}")
         return jsonify(recent_requests[request_id])
 
-    # 可选的疾病列表
-    diseases = [
-        "流感", "肺炎", "胃溃疡", "偏头痛", "扁桃体炎",
-        "高血压", "糖尿病", "关节炎", "哮喘", "过敏性鼻炎"
-    ]
-
+    # 使用配置文件中的疾病列表
     import random
-    diagnosis = random.choice(diseases)
+    diagnosis = random.choice(GAME_CONFIG["diseases"])
 
     # 生成游戏ID
     game_id = str(uuid.uuid4())

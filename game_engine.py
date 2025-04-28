@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv(override=True)
 
+# 导入配置
+from config import GAME_CONFIG
+
 # 定义状态类型
 class GameState(TypedDict):
     messages: List[Dict[str, Any]]  # 对话历史
@@ -631,25 +634,41 @@ def system_node(state: GameState, game_id=None) -> Dict:
 
     # 只对病人消息进行合理性检查
     if current_message["sender"] == "patient":
-        # 构建提示
-        formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages[:-1]])
-        prompt = system_prompt.format(
-            messages=formatted_messages,
-            current_message=current_message["content"],
-            sender=current_message["sender"],
-            diagnosis=diagnosis
-        )
+        # 检查是否为空消息
+        if not current_message["content"].strip():
+            # 如果消息为空，提供默认内容
+            default_content = "医生，我能否再详细描述一下我的症状？"
+            fixed_message = {"sender": "patient", "content": default_content}
 
-        # 获取系统判断
-        system_response = invoke_llm(prompt, SYSTEM_REFEREE_MESSAGE + f"\n正确的诊断是：{diagnosis}", game_id)
+            return {
+                "messages": messages[:-1] + [fixed_message],  # 替换空消息
+                "current_sender": "doctor",
+                "diagnosis": diagnosis,
+                "game_over": False,
+                "system_notes": "空白消息已替换为默认内容"
+            }
 
-        # 解析系统回复
-        is_reasonable = "合理" in system_response
+        # 根据配置决定是否进行LLM检查
+        if GAME_CONFIG["check_patient_response"]:
+            # 构建提示
+            formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages[:-1]])
+            prompt = system_prompt.format(
+                messages=formatted_messages,
+                current_message=current_message["content"],
+                sender=current_message["sender"],
+                diagnosis=diagnosis
+            )
 
-        if not is_reasonable and current_message["content"].strip():
-            # 病人消息不合理，需要重新生成
-            # 创建一个特殊提示来生成更合理的病人回复
-            fix_prompt = f"""
+            # 获取系统判断
+            system_response = invoke_llm(prompt, SYSTEM_REFEREE_MESSAGE + f"\n正确的诊断是：{diagnosis}", game_id)
+
+            # 解析系统回复
+            is_reasonable = "合理" in system_response
+
+            if not is_reasonable:
+                # 病人消息不合理，需要重新生成
+                # 创建一个特殊提示来生成更合理的病人回复
+                fix_prompt = f"""
 前一条病人消息被系统判断为不合理，原因是: {system_response}
 
 请根据以下对话历史，生成一个新的合理病人回复:
@@ -665,46 +684,43 @@ def system_node(state: GameState, game_id=None) -> Dict:
 5. 回复简短直接，不超过4-5句话
 6. 确保回复有实际内容，不能为空
 """
-            # 生成修正后的病人回复
-            fixed_content = invoke_llm(fix_prompt, PATIENT_SYSTEM_MESSAGE + "\n请确保生成合理的病人回复，避免之前的问题。", game_id)
+                # 生成修正后的病人回复
+                fixed_content = invoke_llm(fix_prompt, PATIENT_SYSTEM_MESSAGE + "\n请确保生成合理的病人回复，避免之前的问题。", game_id)
 
-            # 确保内容不为空
-            if not fixed_content.strip():
-                fixed_content = "医生，我想再详细说明一下我的症状，我确实感到不舒服，但很难用专业术语描述。"
+                # 确保内容不为空
+                if not fixed_content.strip():
+                    fixed_content = "医生，我想再详细说明一下我的症状，我确实感到不舒服，但很难用专业术语描述。"
 
-            # 再次清理询问身体内容
-            fixed_content = re.sub(r'\[询问身体:.*?\]', '', fixed_content).strip()
+                # 再次清理询问身体内容
+                fixed_content = re.sub(r'\[询问身体:.*?\]', '', fixed_content).strip()
 
-            # 创建修正后的消息，替换原来的消息
-            fixed_message = {"sender": "patient", "content": fixed_content}
+                # 创建修正后的消息，替换原来的消息
+                fixed_message = {"sender": "patient", "content": fixed_content}
 
-            return {
-                "messages": messages[:-1] + [fixed_message],  # 替换最后一条消息
-                "current_sender": "system",  # 再次检查修正后的消息
-                "diagnosis": diagnosis,
-                "game_over": False,
-                "system_notes": f"病人消息已修正。原因: {system_response}"  # 保存系统的思考过程
-            }
-        elif not current_message["content"].strip():
-            # 如果消息为空，提供默认内容
-            default_content = "医生，我能否再详细描述一下我的症状？"
-            fixed_message = {"sender": "patient", "content": default_content}
-
-            return {
-                "messages": messages[:-1] + [fixed_message],  # 替换空消息
-                "current_sender": "doctor",
-                "diagnosis": diagnosis,
-                "game_over": False,
-                "system_notes": "空白消息已替换为默认内容"
-            }
+                return {
+                    "messages": messages[:-1] + [fixed_message],  # 替换最后一条消息
+                    "current_sender": "system",  # 再次检查修正后的消息
+                    "diagnosis": diagnosis,
+                    "game_over": False,
+                    "system_notes": f"病人消息已修正。原因: {system_response}"  # 保存系统的思考过程
+                }
+            else:
+                # 病人消息合理，轮到医生回复
+                return {
+                    "messages": messages,
+                    "current_sender": "doctor",
+                    "diagnosis": diagnosis,
+                    "game_over": False,
+                    "system_notes": system_response  # 保存系统的思考过程
+                }
         else:
-            # 病人消息合理，轮到医生回复
+            # 不进行LLM检查，直接轮到医生回复
             return {
                 "messages": messages,
                 "current_sender": "doctor",
                 "diagnosis": diagnosis,
                 "game_over": False,
-                "system_notes": system_response  # 保存系统的思考过程
+                "system_notes": "跳过病人消息合理性检查（已禁用）"
             }
 
     # 其他情况，直接返回当前状态
