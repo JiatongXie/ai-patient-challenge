@@ -51,34 +51,29 @@ const MessageContent = styled.div`
   line-height: 1.5;
 `;
 
-const LoadingDots = styled.div`
+const LoadingSpinner = styled.div`
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  padding: 4px 0;
 
   &::after {
-    content: "...";
-    animation: loading 1.5s infinite;
-    overflow: hidden;
-    display: inline-block;
-    vertical-align: bottom;
-    width: 24px;
+    content: "";
+    display: block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-top-color: rgba(0, 0, 0, 0.4);
+    animation: spin 0.8s linear infinite;
   }
 
-  @keyframes loading {
+  @keyframes spin {
     0% {
-      width: 0;
-    }
-    25% {
-      width: 6px;
-    }
-    50% {
-      width: 12px;
-    }
-    75% {
-      width: 18px;
+      transform: rotate(0deg);
     }
     100% {
-      width: 24px;
+      transform: rotate(360deg);
     }
   }
 `;
@@ -109,7 +104,9 @@ const ChatMessage = ({ sender, content, isLatest, isLoading }) => {
     <MessageContainer isDoctor={isDoctor} isLoading={isLoading}>
       <Avatar isDoctor={isDoctor}>{avatarText}</Avatar>
       <MessageBubble isDoctor={isDoctor}>
-        <MessageContent>{isLoading ? <LoadingDots /> : content}</MessageContent>
+        <MessageContent>
+          {isLoading ? <LoadingSpinner /> : content}
+        </MessageContent>
       </MessageBubble>
     </MessageContainer>
   );

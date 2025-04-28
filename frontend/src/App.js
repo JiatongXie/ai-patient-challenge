@@ -36,7 +36,7 @@ function App() {
   const [gameId, setGameId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [gameOver, setGameOver] = useState(false);
-  const [currentSender, setCurrentSender] = useState("");
+  const [currentSender, setCurrentSender] = useState("doctor");
   const [diagnosis, setDiagnosis] = useState("");
   const [error, setError] = useState("");
 
@@ -53,7 +53,8 @@ function App() {
 
       setGameId(response.data.game_id);
       setMessages(response.data.messages);
-      setCurrentSender(response.data.current_sender);
+      // 确保current_sender存在，否则默认为doctor
+      setCurrentSender(response.data.current_sender || "doctor");
       setGameOver(response.data.game_over);
       setDiagnosis("");
     } catch (err) {
@@ -78,6 +79,9 @@ function App() {
         { sender: "doctor", content: message },
       ]);
 
+      // 立即将currentSender设置为patient，表示等待病人回复
+      setCurrentSender("patient");
+
       const response = await api.post("/api/send_message", {
         game_id: gameId,
         message: message,
@@ -85,7 +89,8 @@ function App() {
 
       // 更新状态
       setMessages(response.data.messages);
-      setCurrentSender(response.data.current_sender);
+      // 确保current_sender存在，否则默认为doctor
+      setCurrentSender(response.data.current_sender || "doctor");
       setGameOver(response.data.game_over);
 
       if (response.data.game_over && response.data.diagnosis) {
@@ -274,12 +279,11 @@ function App() {
             key={index}
             sender={message.sender}
             content={message.content}
-            isLatest={index === messages.length - 1}
           />
         ))}
 
-        {isLoading && currentSender === "patient" && (
-          <ChatMessage sender="patient" content="..." isLoading={true} />
+        {isLoading && (
+          <ChatMessage sender="patient" content="" isLoading={true} />
         )}
 
         {error && (
