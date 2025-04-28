@@ -36,7 +36,7 @@ export default defineConfig({
     extensions: [".js", ".jsx", ".json"],
   },
   esbuild: {
-    loader: "jsx",
+    loader: { ".js": "jsx", ".jsx": "jsx" },
     include: /src\/.*\.jsx?$/,
     exclude: [],
   },
