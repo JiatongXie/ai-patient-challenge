@@ -85,8 +85,13 @@ def auto_save_conversation(game_id):
             if msg["sender"] == "patient":
                 # 复制消息以避免修改原始状态
                 new_msg = msg.copy()
-                # 清理询问身体内容
-                new_msg["content"] = re.sub(r'\[询问身体:.*?\]', '', new_msg["content"]).strip()
+                # 清理询问身体内容，使用更严格的正则表达式
+                # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', new_msg["content"])
+                # 匹配旧格式[询问身体]
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', new_msg["content"])
+                # 去除可能的多余空格
+                new_msg["content"] = new_msg["content"].strip()
                 messages_to_save.append(new_msg)
             elif msg["sender"] != "body":  # 排除身体消息
                 messages_to_save.append(msg)
@@ -162,8 +167,14 @@ def new_game():
     # 确保初始消息不包含询问身体内容
     for i, msg in enumerate(patient_state["messages"]):
         if msg["sender"] == "patient":
-            # 清理可能的询问身体内容
-            cleaned_content = re.sub(r'\[询问身体:.*?\]', '', msg["content"]).strip()
+            # 清理可能的询问身体内容，使用更严格的正则表达式
+            # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+            cleaned_content = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', msg["content"])
+            # 匹配旧格式[询问身体]
+            cleaned_content = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', cleaned_content)
+            # 去除可能的多余空格
+            cleaned_content = cleaned_content.strip()
+
             if not cleaned_content:
                 cleaned_content = "医生您好，我最近感觉身体不舒服，来看看是怎么回事。"
             patient_state["messages"][i]["content"] = cleaned_content
@@ -272,15 +283,16 @@ def send_message():
                 break
 
         if last_patient_msg:
-            # 提取询问身体的内容（使用严格的格式匹配）
-            inquiry_match = re.search(r'\[询问身体:(.*?)\]', last_patient_msg["content"])
+            # 提取询问身体的内容（使用更严格的格式匹配）
+            # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+            inquiry_match = re.search(r'\s*\[\s*询问身体\s*:\s*(.*?)\]\s*', last_patient_msg["content"])
             if inquiry_match and inquiry_match.group(1).strip():
                 api_logs[game_id].append(f"患者询问身体: {inquiry_match.group(1).strip()}")
             else:
-                # 兼容旧格式，但确保不会记录普通消息
-                old_format = last_patient_msg["content"].replace("[询问身体]:", "").strip()
-                if "[询问身体]" in last_patient_msg["content"]:
-                    api_logs[game_id].append(f"患者询问身体: {old_format}")
+                # 尝试匹配旧格式[询问身体]
+                old_format_match = re.search(r'\s*\[\s*询问身体\s*\]\s*:?\s*(.*)', last_patient_msg["content"])
+                if old_format_match and old_format_match.group(1).strip():
+                    api_logs[game_id].append(f"患者询问身体: {old_format_match.group(1).strip()}")
 
             # 调用身体节点
             body_state = body_node(patient_state, game_id)
@@ -317,11 +329,24 @@ def send_message():
                 # 自动保存对话
                 auto_save_conversation(game_id)
 
-                # 过滤所有空白消息
+                # 过滤所有空白消息和清理患者消息中的询问身体内容
                 messages_to_return = []
                 for msg in final_state["messages"]:
                     if msg["sender"] != "body" and (not msg["sender"] == "patient" or msg["content"].strip()):
-                        messages_to_return.append(msg)
+                        # 如果是患者消息，确保彻底清理询问身体内容
+                        if msg["sender"] == "patient":
+                            # 复制消息以避免修改原始状态
+                            new_msg = msg.copy()
+                            # 清理询问身体内容，使用更严格的正则表达式
+                            # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+                            new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', new_msg["content"])
+                            # 匹配旧格式[询问身体]
+                            new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', new_msg["content"])
+                            # 去除可能的多余空格
+                            new_msg["content"] = new_msg["content"].strip()
+                            messages_to_return.append(new_msg)
+                        else:
+                            messages_to_return.append(msg)
 
                 # 返回更新后的消息
                 return jsonify({
@@ -345,11 +370,24 @@ def send_message():
     # 自动保存对话
     auto_save_conversation(game_id)
 
-    # 过滤所有空白消息和身体消息
+    # 过滤所有空白消息和身体消息，并清理患者消息中的询问身体内容
     messages_to_return = []
     for msg in final_state["messages"]:
         if msg["sender"] != "body" and (not msg["sender"] == "patient" or msg["content"].strip()):
-            messages_to_return.append(msg)
+            # 如果是患者消息，确保彻底清理询问身体内容
+            if msg["sender"] == "patient":
+                # 复制消息以避免修改原始状态
+                new_msg = msg.copy()
+                # 清理询问身体内容，使用更严格的正则表达式
+                # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', new_msg["content"])
+                # 匹配旧格式[询问身体]
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', new_msg["content"])
+                # 去除可能的多余空格
+                new_msg["content"] = new_msg["content"].strip()
+                messages_to_return.append(new_msg)
+            else:
+                messages_to_return.append(msg)
 
     # 返回更新后的消息
     return jsonify({
@@ -366,8 +404,27 @@ def game_status(game_id):
 
     state = active_games[game_id]
 
+    # 过滤所有身体消息，并清理患者消息中的询问身体内容
+    messages_to_return = []
+    for msg in state["messages"]:
+        if msg["sender"] != "body":
+            # 如果是患者消息，确保彻底清理询问身体内容
+            if msg["sender"] == "patient":
+                # 复制消息以避免修改原始状态
+                new_msg = msg.copy()
+                # 清理询问身体内容，使用更严格的正则表达式
+                # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', new_msg["content"])
+                # 匹配旧格式[询问身体]
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', new_msg["content"])
+                # 去除可能的多余空格
+                new_msg["content"] = new_msg["content"].strip()
+                messages_to_return.append(new_msg)
+            else:
+                messages_to_return.append(msg)
+
     return jsonify({
-        "messages": [msg for msg in state["messages"] if msg["sender"] != "body"],
+        "messages": messages_to_return,
         "current_sender": state.get("current_sender"),
         "game_over": state.get("game_over", False),
         "diagnosis": state.get("diagnosis") if state.get("game_over", False) else None

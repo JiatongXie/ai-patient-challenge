@@ -429,14 +429,18 @@ def patient_node(state: GameState, game_id=None) -> Dict:
     # 更新状态
     new_message = {"sender": "patient", "content": content}
 
-    # 检查是否需要询问身体 - 使用严格的格式匹配
+    # 检查是否需要询问身体 - 使用更严格的格式匹配
     import re
-    inquiry_match = re.search(r'\[询问身体:(.*?)\]', content)
+    # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+    inquiry_match = re.search(r'\s*\[\s*询问身体\s*:\s*(.*?)\]\s*', content)
 
     # 初始消息不应该直接询问身体
     if len(messages) <= 1 and inquiry_match:
         # 如果是初始消息却包含询问身体，去掉询问部分
-        content = re.sub(r'\[询问身体:.*?\]', '', content).strip()
+        content = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', content)
+        # 匹配旧格式[询问身体]
+        content = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', content)
+        content = content.strip()
         new_message = {"sender": "patient", "content": content}
         return {
             "messages": messages + [new_message],
@@ -506,16 +510,21 @@ def body_node(state: GameState, game_id=None) -> Dict:
     # 获取病人的询问 - 使用严格的格式匹配
     patient_message = messages[-1]["content"]
 
-    # 提取方括号内的内容
+    # 提取方括号内的内容，使用更严格的正则表达式
     import re
-    inquiry_match = re.search(r'\[询问身体:(.*?)\]', patient_message)
+    # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+    inquiry_match = re.search(r'\s*\[\s*询问身体\s*:\s*(.*?)\]\s*', patient_message)
 
     if inquiry_match and inquiry_match.group(1).strip():
         patient_query = inquiry_match.group(1).strip()
     else:
-        # 兼容旧格式
-        old_match = patient_message.replace("[询问身体]:", "").strip()
-        patient_query = old_match if old_match else "我的症状是什么？"
+        # 尝试匹配旧格式[询问身体]
+        old_format_match = re.search(r'\s*\[\s*询问身体\s*\]\s*:?\s*(.*)', patient_message)
+        if old_format_match and old_format_match.group(1).strip():
+            patient_query = old_format_match.group(1).strip()
+        else:
+            # 如果都没匹配到，使用默认查询
+            patient_query = "我的症状是什么？"
 
     # 构建提示
     formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages])
@@ -555,8 +564,13 @@ def system_node(state: GameState, game_id=None) -> Dict:
     for i, msg in enumerate(messages):
         if msg["sender"] == "patient":
             content = msg["content"]
-            # 使用精确的正则表达式清理询问身体格式
-            cleaned_content = re.sub(r'\[询问身体:.*?\]', '', content).strip()
+            # 使用更严格的正则表达式清理询问身体格式
+            # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+            cleaned_content = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', content)
+            # 匹配旧格式[询问身体]
+            cleaned_content = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', cleaned_content)
+            # 去除可能的多余空格
+            cleaned_content = cleaned_content.strip()
 
             # 只在内容有变化时更新
             if cleaned_content != content:
