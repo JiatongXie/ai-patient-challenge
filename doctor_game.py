@@ -26,15 +26,28 @@ client = OpenAI(
 )
 
 # 自定义LLM函数，使用OpenAI客户端
-def invoke_llm(prompt, system_message="你是一个AI助手"):
-    # 生成调用ID用于追踪请求
+def invoke_llm(prompt, system_message="你是一个AI助手", game_id=None):
+    """
+    调用LLM API并记录日志
+
+    Args:
+        prompt: 用户消息
+        system_message: 系统消息
+        game_id: 游戏ID，用于关联API调用日志到特定游戏
+
+    Returns:
+        API响应内容
+    """
+    # 导入必要的模块
     import hashlib
     import json
     import os
+    import threading
 
     # 确保api_logs文件夹存在
     os.makedirs("api_logs", exist_ok=True)
 
+    # 生成调用ID用于追踪请求
     call_id = hashlib.md5((prompt + system_message).encode()).hexdigest()[:8]
 
     # 记录API调用请求
@@ -76,7 +89,7 @@ def invoke_llm(prompt, system_message="你是一个AI助手"):
         globals()["api_logs"] = []
     globals()["api_logs"].append(api_log)
 
-    # 创建详细的API调用日志文件
+    # 创建详细的API调用日志数据
     log_data = {
         "timestamp": api_call_time,
         "call_id": call_id,
@@ -89,14 +102,81 @@ def invoke_llm(prompt, system_message="你是一个AI助手"):
         "model": os.getenv("MODEL_ID", "未指定模型")
     }
 
-    # 生成日志文件名
-    log_filename = f"api_logs/api_call_{api_call_timestamp}_{call_id}.json"
-
     # 保存日志到文件
-    with open(log_filename, "w", encoding="utf-8") as f:
-        json.dump(log_data, f, ensure_ascii=False, indent=2)
+    save_api_log(log_data, game_id, call_id, api_call_timestamp)
 
     return response_content
+
+def save_api_log(log_data, game_id=None, call_id=None, timestamp=None):
+    """
+    保存API调用日志到文件
+
+    Args:
+        log_data: 日志数据
+        game_id: 游戏ID
+        call_id: 调用ID
+        timestamp: 时间戳
+    """
+    import json
+    import os
+    import threading
+
+    # 确保api_logs文件夹存在
+    os.makedirs("api_logs", exist_ok=True)
+
+    # 如果没有提供时间戳，生成一个新的
+    if not timestamp:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # 如果没有提供调用ID，生成一个新的
+    if not call_id:
+        import hashlib
+        call_id = hashlib.md5(str(log_data).encode()).hexdigest()[:8]
+
+    # 使用线程锁防止并发写入冲突
+    lock = threading.Lock()
+
+    with lock:
+        if game_id:
+            # 按游戏ID保存日志
+            game_log_dir = f"api_logs/game_{game_id}"
+            os.makedirs(game_log_dir, exist_ok=True)
+
+            # 游戏日志文件（追加模式）
+            game_log_file = f"{game_log_dir}/api_calls.json"
+
+            try:
+                # 读取现有日志（如果存在）
+                if os.path.exists(game_log_file):
+                    with open(game_log_file, "r", encoding="utf-8") as f:
+                        try:
+                            logs = json.load(f)
+                            if not isinstance(logs, list):
+                                logs = [logs]  # 确保logs是一个列表
+                        except json.JSONDecodeError:
+                            # 如果文件为空或格式不正确，创建新的日志列表
+                            logs = []
+                else:
+                    logs = []
+
+                # 添加新的日志
+                logs.append(log_data)
+
+                # 写入更新后的日志
+                with open(game_log_file, "w", encoding="utf-8") as f:
+                    json.dump(logs, f, ensure_ascii=False, indent=2)
+
+            except Exception as e:
+                print(f"保存游戏API日志时出错: {e}")
+                # 如果保存到游戏日志文件失败，回退到单独的日志文件
+                fallback_file = f"api_logs/api_call_{timestamp}_{call_id}.json"
+                with open(fallback_file, "w", encoding="utf-8") as f:
+                    json.dump(log_data, f, ensure_ascii=False, indent=2)
+        else:
+            # 如果没有提供游戏ID，保存为单独的日志文件
+            log_file = f"api_logs/api_call_{timestamp}_{call_id}.json"
+            with open(log_file, "w", encoding="utf-8") as f:
+                json.dump(log_data, f, ensure_ascii=False, indent=2)
 
 # 病人角色
 patient_prompt = PromptTemplate.from_template("""

@@ -24,13 +24,25 @@ client = OpenAI(
 )
 
 # 自定义LLM函数，使用OpenAI客户端
-def invoke_llm(prompt, system_message="你是一个AI助手"):
-    # 生成调用ID用于追踪请求
+def invoke_llm(prompt, system_message="你是一个AI助手", game_id=None):
+    """
+    调用LLM API并记录日志
+
+    Args:
+        prompt: 用户消息
+        system_message: 系统消息
+        game_id: 游戏ID，用于关联API调用日志到特定游戏
+
+    Returns:
+        API响应内容
+    """
     import json
+    import threading
 
     # 确保api_logs文件夹存在
     os.makedirs("api_logs", exist_ok=True)
 
+    # 生成调用ID用于追踪请求
     call_id = hashlib.md5((prompt + system_message).encode()).hexdigest()[:8]
 
     # 记录API调用请求
@@ -72,7 +84,7 @@ def invoke_llm(prompt, system_message="你是一个AI助手"):
         globals()["api_logs"] = []
     globals()["api_logs"].append(api_log)
 
-    # 创建详细的API调用日志文件
+    # 创建详细的API调用日志数据
     log_data = {
         "timestamp": api_call_time,
         "call_id": call_id,
@@ -85,14 +97,79 @@ def invoke_llm(prompt, system_message="你是一个AI助手"):
         "model": os.getenv("MODEL_ID", "未指定模型")
     }
 
-    # 生成日志文件名
-    log_filename = f"api_logs/api_call_{api_call_timestamp}_{call_id}.json"
-
     # 保存日志到文件
-    with open(log_filename, "w", encoding="utf-8") as f:
-        json.dump(log_data, f, ensure_ascii=False, indent=2)
+    save_api_log(log_data, game_id, call_id, api_call_timestamp)
 
     return response_content
+
+def save_api_log(log_data, game_id=None, call_id=None, timestamp=None):
+    """
+    保存API调用日志到文件
+
+    Args:
+        log_data: 日志数据
+        game_id: 游戏ID
+        call_id: 调用ID
+        timestamp: 时间戳
+    """
+    import json
+    import threading
+
+    # 确保api_logs文件夹存在
+    os.makedirs("api_logs", exist_ok=True)
+
+    # 如果没有提供时间戳，生成一个新的
+    if not timestamp:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # 如果没有提供调用ID，生成一个新的
+    if not call_id:
+        call_id = hashlib.md5(str(log_data).encode()).hexdigest()[:8]
+
+    # 使用线程锁防止并发写入冲突
+    lock = threading.Lock()
+
+    with lock:
+        if game_id:
+            # 按游戏ID保存日志
+            game_log_dir = f"api_logs/game_{game_id}"
+            os.makedirs(game_log_dir, exist_ok=True)
+
+            # 游戏日志文件（追加模式）
+            game_log_file = f"{game_log_dir}/api_calls.json"
+
+            try:
+                # 读取现有日志（如果存在）
+                if os.path.exists(game_log_file):
+                    with open(game_log_file, "r", encoding="utf-8") as f:
+                        try:
+                            logs = json.load(f)
+                            if not isinstance(logs, list):
+                                logs = [logs]  # 确保logs是一个列表
+                        except json.JSONDecodeError:
+                            # 如果文件为空或格式不正确，创建新的日志列表
+                            logs = []
+                else:
+                    logs = []
+
+                # 添加新的日志
+                logs.append(log_data)
+
+                # 写入更新后的日志
+                with open(game_log_file, "w", encoding="utf-8") as f:
+                    json.dump(logs, f, ensure_ascii=False, indent=2)
+
+            except Exception as e:
+                print(f"保存游戏API日志时出错: {e}")
+                # 如果保存到游戏日志文件失败，回退到单独的日志文件
+                fallback_file = f"api_logs/api_call_{timestamp}_{call_id}.json"
+                with open(fallback_file, "w", encoding="utf-8") as f:
+                    json.dump(log_data, f, ensure_ascii=False, indent=2)
+        else:
+            # 如果没有提供游戏ID，保存为单独的日志文件
+            log_file = f"api_logs/api_call_{timestamp}_{call_id}.json"
+            with open(log_file, "w", encoding="utf-8") as f:
+                json.dump(log_data, f, ensure_ascii=False, indent=2)
 
 # 病人角色
 patient_prompt = PromptTemplate.from_template("""
@@ -197,7 +274,7 @@ SYSTEM_REFEREE_MESSAGE = """
 """
 
 # 定义节点函数
-def patient_node(state: GameState) -> Dict:
+def patient_node(state: GameState, game_id=None) -> Dict:
     """病人节点，生成病人回复"""
     messages = state["messages"]
     diagnosis = state.get("diagnosis", "")
@@ -234,7 +311,7 @@ def patient_node(state: GameState) -> Dict:
 7. 不要复述全部身体反馈，只选择与医生问题相关的症状
 8. 确保你的回复有实际内容，不能为空
 """
-        content = invoke_llm(special_prompt, PATIENT_SYSTEM_MESSAGE)
+        content = invoke_llm(special_prompt, PATIENT_SYSTEM_MESSAGE, game_id)
 
         # 确保内容不为空
         if not content.strip():
@@ -282,10 +359,10 @@ def patient_node(state: GameState) -> Dict:
     # 如果是游戏第一次开始，确保病人有一个友好的问候
     if len(messages) <= 1:
         greeting_prompt = "你是第一次去医院的病人，请用一句话友好地向医生问好，并简要描述你的主要症状。不要使用[询问身体:xxx]格式。"
-        content = invoke_llm(greeting_prompt, PATIENT_SYSTEM_MESSAGE)
+        content = invoke_llm(greeting_prompt, PATIENT_SYSTEM_MESSAGE, game_id)
     else:
         # 获取病人回复
-        content = invoke_llm(prompt, PATIENT_SYSTEM_MESSAGE)
+        content = invoke_llm(prompt, PATIENT_SYSTEM_MESSAGE, game_id)
 
     # 确保内容不为空
     if not content.strip():
@@ -325,7 +402,7 @@ def patient_node(state: GameState) -> Dict:
             "game_over": False
         }
 
-def body_node(state: GameState) -> Dict:
+def body_node(state: GameState, game_id=None) -> Dict:
     """身体节点，生成身体感官响应"""
     messages = state["messages"]
     diagnosis = state.get("diagnosis", "")
@@ -352,7 +429,7 @@ def body_node(state: GameState) -> Dict:
     )
 
     # 获取身体回复
-    content = invoke_llm(prompt, BODY_SYSTEM_MESSAGE + f"\n当前病名是：{diagnosis}。针对'{patient_query}'请描述相关的身体感受。")
+    content = invoke_llm(prompt, BODY_SYSTEM_MESSAGE + f"\n当前病名是：{diagnosis}。针对'{patient_query}'请描述相关的身体感受。", game_id)
 
     # 确保内容不为空
     if not content.strip():
@@ -368,7 +445,7 @@ def body_node(state: GameState) -> Dict:
         "game_over": False
     }
 
-def system_node(state: GameState) -> Dict:
+def system_node(state: GameState, game_id=None) -> Dict:
     """系统节点，负责检查消息合理性和游戏状态"""
     messages = state["messages"]
     diagnosis = state["diagnosis"]
@@ -415,7 +492,7 @@ def system_node(state: GameState) -> Dict:
 只有当医生明确指出正确疾病名称时才算正确，如果医生提到了错误的疾病，一定是不正确的。
 请以"诊断正确: [是/否]"开始你的回答，并解释理由。
 """
-            diagnosis_result = invoke_llm(diagnosis_prompt, "你是医学诊断评估专家，判断医生的诊断是否与标准诊断匹配。")
+            diagnosis_result = invoke_llm(diagnosis_prompt, "你是医学诊断评估专家，判断医生的诊断是否与标准诊断匹配。", game_id)
 
             # 解析诊断结果
             is_correct_diagnosis = "诊断正确: 是" in diagnosis_result
@@ -451,7 +528,7 @@ def system_node(state: GameState) -> Dict:
         )
 
         # 获取系统判断
-        system_response = invoke_llm(prompt, SYSTEM_REFEREE_MESSAGE + f"\n正确的诊断是：{diagnosis}")
+        system_response = invoke_llm(prompt, SYSTEM_REFEREE_MESSAGE + f"\n正确的诊断是：{diagnosis}", game_id)
 
         # 解析系统回复
         is_reasonable = "合理" in system_response
@@ -476,7 +553,7 @@ def system_node(state: GameState) -> Dict:
 6. 确保回复有实际内容，不能为空
 """
             # 生成修正后的病人回复
-            fixed_content = invoke_llm(fix_prompt, PATIENT_SYSTEM_MESSAGE + "\n请确保生成合理的病人回复，避免之前的问题。")
+            fixed_content = invoke_llm(fix_prompt, PATIENT_SYSTEM_MESSAGE + "\n请确保生成合理的病人回复，避免之前的问题。", game_id)
 
             # 确保内容不为空
             if not fixed_content.strip():
