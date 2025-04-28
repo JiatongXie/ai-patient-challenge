@@ -40,6 +40,7 @@ function App() {
   const [error, setError] = useState("");
 
   const chatContainerRef = useRef(null);
+  const gameInitializedRef = useRef(false);
 
   // 创建新游戏
   const startNewGame = async () => {
@@ -153,8 +154,18 @@ function App() {
 
   // 初始加载时创建新游戏
   useEffect(() => {
-    startNewGame();
+    // 防止在严格模式下重复初始化游戏
+    if (!gameInitializedRef.current) {
+      gameInitializedRef.current = true;
+      startNewGame();
+    }
   }, []);
+
+  // 处理新游戏按钮点击
+  const handleNewGame = () => {
+    // 允许创建新游戏
+    startNewGame();
+  };
 
   return (
     <Container>
@@ -192,7 +203,7 @@ function App() {
       />
 
       <GameControls
-        onNewGame={startNewGame}
+        onNewGame={handleNewGame}
         onSaveConversation={saveConversation}
         gameOver={gameOver}
         disabled={isLoading}
