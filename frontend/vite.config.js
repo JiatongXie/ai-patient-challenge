@@ -1,10 +1,18 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// 从环境变量或默认值获取允许的主机列表
+const getAllowedHosts = () => {
+  const envHosts = process.env.VITE_ALLOWED_HOSTS;
+  const defaultHosts = ["localhost"];
+  return envHosts ? [...defaultHosts, ...envHosts.split(",")] : defaultHosts;
+};
+
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    allowedHosts: getAllowedHosts(),
     proxy: {
       "/api": {
         target: "http://localhost:5001",
