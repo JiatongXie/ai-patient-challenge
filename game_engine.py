@@ -26,11 +26,32 @@ client = OpenAI(
 # 自定义LLM函数，使用OpenAI客户端
 def invoke_llm(prompt, system_message="你是一个AI助手"):
     # 生成调用ID用于追踪请求
+    import json
+
+    # 确保api_logs文件夹存在
+    os.makedirs("api_logs", exist_ok=True)
+
     call_id = hashlib.md5((prompt + system_message).encode()).hexdigest()[:8]
-    
+
     # 记录API调用请求
     api_call_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+    api_call_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    api_log = f"[{api_call_time}] API请求 ID:{call_id}\n系统消息: {system_message}\n用户消息: {prompt}\n"
+
+    # 检查是否已经有相同的调用（防止重复请求）
+    if "api_logs_ids" not in globals():
+        globals()["api_logs_ids"] = set()
+
+    # 如果相同的请求已经发过，则添加标记
+    is_duplicate = False
+    if call_id in globals()["api_logs_ids"]:
+        api_log = f"[{api_call_time}] ‼️ 重复API请求 ID:{call_id}\n系统消息: {system_message}\n用户消息: {prompt}\n"
+        print(f"警告：检测到重复API调用 ID:{call_id}")
+        is_duplicate = True
+
+    # 将调用ID添加到已调用集合
+    globals()["api_logs_ids"].add(call_id)
+
     # 调用API
     response = client.chat.completions.create(
         model=os.getenv("MODEL_ID"),
@@ -39,10 +60,38 @@ def invoke_llm(prompt, system_message="你是一个AI助手"):
             {"role": "user", "content": prompt}
         ]
     )
-    
+
     # 获取回复内容
     response_content = response.choices[0].message.content
-    
+
+    # 记录API返回结果
+    api_log += f"API返回: {response_content}\n{'='*50}\n"
+
+    # 将API调用记录添加到全局日志
+    if "api_logs" not in globals():
+        globals()["api_logs"] = []
+    globals()["api_logs"].append(api_log)
+
+    # 创建详细的API调用日志文件
+    log_data = {
+        "timestamp": api_call_time,
+        "call_id": call_id,
+        "is_duplicate": is_duplicate,
+        "input": {
+            "system_message": system_message,
+            "user_message": prompt
+        },
+        "output": response_content,
+        "model": os.getenv("MODEL_ID", "未指定模型")
+    }
+
+    # 生成日志文件名
+    log_filename = f"api_logs/api_call_{api_call_timestamp}_{call_id}.json"
+
+    # 保存日志到文件
+    with open(log_filename, "w", encoding="utf-8") as f:
+        json.dump(log_data, f, ensure_ascii=False, indent=2)
+
     return response_content
 
 # 病人角色
@@ -152,22 +201,22 @@ def patient_node(state: GameState) -> Dict:
     """病人节点，生成病人回复"""
     messages = state["messages"]
     diagnosis = state.get("diagnosis", "")
-    
+
     # 检查是否刚从身体节点返回
     last_message = messages[-1] if messages else None
     if last_message and last_message["sender"] == "body":
         # 如果最后一条消息是body的回复，说明病人正在询问身体
-        
+
         # 获取医生最近的问题，以便病人在回答时考虑
         doctor_question = ""
         for msg in reversed(messages[:-1]):  # 排除最后一条body消息
             if msg["sender"] == "doctor":
                 doctor_question = msg["content"]
                 break
-        
+
         # 构造特殊提示，帮助病人基于身体感知回复医生
         body_response = last_message["content"]
-        
+
         special_prompt = f"""
 你是一位病人，刚才询问了自己的身体感受，得到了以下反馈:
 
@@ -186,14 +235,14 @@ def patient_node(state: GameState) -> Dict:
 8. 确保你的回复有实际内容，不能为空
 """
         content = invoke_llm(special_prompt, PATIENT_SYSTEM_MESSAGE)
-        
+
         # 确保内容不为空
         if not content.strip():
             content = "医生，我最近感觉身体确实不太舒服，具体症状有点复杂，能否请您详细问诊？"
-        
+
         # 创建病人消息
         new_message = {"sender": "patient", "content": content}
-        
+
         # 返回新状态，进入系统检查
         return {
             "messages": messages + [new_message],
@@ -201,11 +250,11 @@ def patient_node(state: GameState) -> Dict:
             "diagnosis": diagnosis,
             "game_over": False
         }
-    
+
     # 检查医生是否刚才给出了诊断
     doctor_gave_diagnosis = False
     doctor_message = ""
-    
+
     # 查找最后一条医生消息
     for msg in reversed(messages):
         if msg["sender"] == "doctor":
@@ -214,10 +263,10 @@ def patient_node(state: GameState) -> Dict:
             diagnosis_terms = ["诊断", "判断", "认为", "确定", "可能是", "应该是", "我觉得是", "你有", "你患了"]
             doctor_gave_diagnosis = any(term in doctor_message for term in diagnosis_terms) or diagnosis.lower() in doctor_message.lower()
             break
-    
+
     # 构建提示
     formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages])
-    
+
     special_instruction = ""
     if doctor_gave_diagnosis:
         special_instruction = """
@@ -227,9 +276,9 @@ def patient_node(state: GameState) -> Dict:
 3. 询问医生是否确定
 但记住，你不具备专业知识来评判诊断的正确性。
 """
-    
+
     prompt = patient_prompt.format(messages=formatted_messages) + special_instruction
-    
+
     # 如果是游戏第一次开始，确保病人有一个友好的问候
     if len(messages) <= 1:
         greeting_prompt = "你是第一次去医院的病人，请用一句话友好地向医生问好，并简要描述你的主要症状。不要使用[询问身体:xxx]格式。"
@@ -237,18 +286,18 @@ def patient_node(state: GameState) -> Dict:
     else:
         # 获取病人回复
         content = invoke_llm(prompt, PATIENT_SYSTEM_MESSAGE)
-    
+
     # 确保内容不为空
     if not content.strip():
         content = "医生，我能再详细说明一下我的症状吗？"
-    
+
     # 更新状态
     new_message = {"sender": "patient", "content": content}
-    
+
     # 检查是否需要询问身体 - 使用严格的格式匹配
     import re
     inquiry_match = re.search(r'\[询问身体:(.*?)\]', content)
-    
+
     # 初始消息不应该直接询问身体
     if len(messages) <= 1 and inquiry_match:
         # 如果是初始消息却包含询问身体，去掉询问部分
@@ -280,38 +329,38 @@ def body_node(state: GameState) -> Dict:
     """身体节点，生成身体感官响应"""
     messages = state["messages"]
     diagnosis = state.get("diagnosis", "")
-    
+
     # 获取病人的询问 - 使用严格的格式匹配
     patient_message = messages[-1]["content"]
-    
+
     # 提取方括号内的内容
     import re
     inquiry_match = re.search(r'\[询问身体:(.*?)\]', patient_message)
-    
+
     if inquiry_match and inquiry_match.group(1).strip():
         patient_query = inquiry_match.group(1).strip()
     else:
         # 兼容旧格式
         old_match = patient_message.replace("[询问身体]:", "").strip()
         patient_query = old_match if old_match else "我的症状是什么？"
-    
+
     # 构建提示
     formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages])
     prompt = body_prompt.format(
         messages=formatted_messages,
         diagnosis=diagnosis
     )
-    
+
     # 获取身体回复
     content = invoke_llm(prompt, BODY_SYSTEM_MESSAGE + f"\n当前病名是：{diagnosis}。针对'{patient_query}'请描述相关的身体感受。")
-    
+
     # 确保内容不为空
     if not content.strip():
         content = f"- 与{diagnosis}相关的典型症状\n- 具体表现为常见的不适感"
-    
+
     # 更新状态
     new_message = {"sender": "body", "content": content}
-    
+
     return {
         "messages": messages + [new_message],
         "current_sender": "patient",
@@ -323,11 +372,11 @@ def system_node(state: GameState) -> Dict:
     """系统节点，负责检查消息合理性和游戏状态"""
     messages = state["messages"]
     diagnosis = state["diagnosis"]
-    
+
     # 如果没有消息，返回当前状态
     if not messages:
         return state
-    
+
     # 首先清理所有病人消息中的询问身体内容
     import re
     for i, msg in enumerate(messages):
@@ -335,14 +384,14 @@ def system_node(state: GameState) -> Dict:
             content = msg["content"]
             # 使用精确的正则表达式清理询问身体格式
             cleaned_content = re.sub(r'\[询问身体:.*?\]', '', content).strip()
-            
+
             # 只在内容有变化时更新
             if cleaned_content != content:
                 messages[i]["content"] = cleaned_content
-    
+
     # 获取最新的消息
     current_message = messages[-1]
-    
+
     # 检查是否是空白消息，如果是则移除
     if current_message["sender"] == "patient" and not current_message["content"].strip():
         # 如果最后一条消息是空白的，移除它
@@ -350,7 +399,7 @@ def system_node(state: GameState) -> Dict:
         if not messages:
             return state
         current_message = messages[-1]
-    
+
     # 检查是否是医生消息，以及是否可能包含诊断
     diagnosis_result = None
     if current_message["sender"] == "doctor":
@@ -367,29 +416,29 @@ def system_node(state: GameState) -> Dict:
 请以"诊断正确: [是/否]"开始你的回答，并解释理由。
 """
             diagnosis_result = invoke_llm(diagnosis_prompt, "你是医学诊断评估专家，判断医生的诊断是否与标准诊断匹配。")
-            
+
             # 解析诊断结果
             is_correct_diagnosis = "诊断正确: 是" in diagnosis_result
             if is_correct_diagnosis:
                 return {
                     "messages": messages + [{"sender": "system", "content": f"恭喜！你正确诊断出了病人的疾病：{diagnosis}。"}],
                     "current_sender": "system",
-                    "diagnosis": diagnosis, 
+                    "diagnosis": diagnosis,
                     "game_over": True,
                     "system_notes": diagnosis_result  # 保存系统的思考过程
                 }
-    
+
     # 对于医生消息，无需进行合理性检查，直接返回
     if current_message["sender"] == "doctor":
         # 医生（玩家）的消息不进行合理性评判，直接轮到病人回复
         return {
             "messages": messages,
-            "current_sender": "patient", 
+            "current_sender": "patient",
             "diagnosis": diagnosis,
             "game_over": False,
             "system_notes": "医生消息已接收，不进行合理性评判"  # 更新系统笔记
         }
-    
+
     # 只对病人消息进行合理性检查
     if current_message["sender"] == "patient":
         # 构建提示
@@ -400,13 +449,13 @@ def system_node(state: GameState) -> Dict:
             sender=current_message["sender"],
             diagnosis=diagnosis
         )
-        
+
         # 获取系统判断
         system_response = invoke_llm(prompt, SYSTEM_REFEREE_MESSAGE + f"\n正确的诊断是：{diagnosis}")
-        
+
         # 解析系统回复
         is_reasonable = "合理" in system_response
-        
+
         if not is_reasonable and current_message["content"].strip():
             # 病人消息不合理，需要重新生成
             # 创建一个特殊提示来生成更合理的病人回复
@@ -428,17 +477,17 @@ def system_node(state: GameState) -> Dict:
 """
             # 生成修正后的病人回复
             fixed_content = invoke_llm(fix_prompt, PATIENT_SYSTEM_MESSAGE + "\n请确保生成合理的病人回复，避免之前的问题。")
-            
+
             # 确保内容不为空
             if not fixed_content.strip():
                 fixed_content = "医生，我想再详细说明一下我的症状，我确实感到不舒服，但很难用专业术语描述。"
-            
+
             # 再次清理询问身体内容
             fixed_content = re.sub(r'\[询问身体:.*?\]', '', fixed_content).strip()
-            
+
             # 创建修正后的消息，替换原来的消息
             fixed_message = {"sender": "patient", "content": fixed_content}
-            
+
             return {
                 "messages": messages[:-1] + [fixed_message],  # 替换最后一条消息
                 "current_sender": "system",  # 再次检查修正后的消息
@@ -450,7 +499,7 @@ def system_node(state: GameState) -> Dict:
             # 如果消息为空，提供默认内容
             default_content = "医生，我能否再详细描述一下我的症状？"
             fixed_message = {"sender": "patient", "content": default_content}
-            
+
             return {
                 "messages": messages[:-1] + [fixed_message],  # 替换空消息
                 "current_sender": "doctor",
@@ -467,6 +516,6 @@ def system_node(state: GameState) -> Dict:
                 "game_over": False,
                 "system_notes": system_response  # 保存系统的思考过程
             }
-    
+
     # 其他情况，直接返回当前状态
-    return state 
+    return state
