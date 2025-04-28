@@ -8,7 +8,7 @@ import GameControls from "./components/GameControls";
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: "http://localhost:5001",
+  baseURL: "/", // 使用相对路径，连接到提供前端的同一服务器
   withCredentials: false,
 });
 
