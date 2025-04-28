@@ -279,12 +279,11 @@ function App() {
             key={index}
             sender={message.sender}
             content={message.content}
-            isLatest={index === messages.length - 1}
           />
         ))}
 
         {isLoading && (
-          <ChatMessage sender="patient" content="..." isLoading={true} />
+          <ChatMessage sender="patient" content="" isLoading={true} />
         )}
 
         {error && (
