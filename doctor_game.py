@@ -1,3 +1,5 @@
+### command line version, only for reference
+
 import os
 from datetime import datetime
 from typing import Dict, List, Any, Optional, TypedDict, Literal
