@@ -171,17 +171,13 @@ def save_api_log(log_data, game_id=None, call_id=None, timestamp=None):
 
     with lock:
         if game_id:
-            # 按游戏ID保存日志
-            game_log_dir = f"api_logs/game_{game_id}"
-            os.makedirs(game_log_dir, exist_ok=True)
-
-            # 游戏日志文件（追加模式）
-            game_log_file = f"{game_log_dir}/api_calls.json"
+            # 直接使用时间戳+游戏ID命名文件，确保按时间排序且不会重名
+            log_file = f"api_logs/api_calls_{timestamp}_{game_id}.json"
 
             try:
                 # 读取现有日志（如果存在）
-                if os.path.exists(game_log_file):
-                    with open(game_log_file, "r", encoding="utf-8") as f:
+                if os.path.exists(log_file):
+                    with open(log_file, "r", encoding="utf-8") as f:
                         try:
                             logs = json.load(f)
                             if not isinstance(logs, list):
@@ -196,12 +192,12 @@ def save_api_log(log_data, game_id=None, call_id=None, timestamp=None):
                 logs.append(log_data)
 
                 # 写入更新后的日志
-                with open(game_log_file, "w", encoding="utf-8") as f:
+                with open(log_file, "w", encoding="utf-8") as f:
                     json.dump(logs, f, ensure_ascii=False, indent=2)
 
             except Exception as e:
                 print(f"保存游戏API日志时出错: {e}")
-                # 如果保存到游戏日志文件失败，回退到单独的日志文件
+                # 如果保存失败，回退到使用调用ID的文件名
                 fallback_file = f"api_logs/api_call_{timestamp}_{call_id}.json"
                 with open(fallback_file, "w", encoding="utf-8") as f:
                     json.dump(log_data, f, ensure_ascii=False, indent=2)
