@@ -7,12 +7,28 @@ const HeaderContainer = styled.div`
   color: white;
   text-align: center;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: relative;
 `;
 
 const Title = styled.h1`
   margin: 0;
   font-size: 18px;
   font-weight: 500;
+`;
+
+const GithubLink = styled.a`
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: white;
+  font-size: 20px;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 1;
+  }
 `;
 
 const StatusBar = styled.div`
@@ -70,6 +86,15 @@ const GameHeader = ({ gameOver, diagnosis, isLoading, currentSender }) => {
   return (
     <HeaderContainer>
       <Title>AI问诊小游戏</Title>
+
+      <GithubLink
+        href="https://github.com/JiatongXie/ai-patient-challenge"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="查看源代码"
+      >
+        <i className="fab fa-github"></i>
+      </GithubLink>
 
       {gameOver ? (
         <div>
