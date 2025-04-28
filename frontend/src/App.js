@@ -6,6 +6,12 @@ import MessageInput from "./components/MessageInput";
 import GameHeader from "./components/GameHeader";
 import GameControls from "./components/GameControls";
 
+// 创建axios实例
+const api = axios.create({
+  baseURL: "http://localhost:5001",
+  withCredentials: false,
+});
+
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -41,7 +47,7 @@ function App() {
       setIsLoading(true);
       setError("");
 
-      const response = await axios.post("/api/new_game");
+      const response = await api.post("/api/new_game");
 
       setGameId(response.data.game_id);
       setMessages(response.data.messages);
@@ -70,7 +76,7 @@ function App() {
         { sender: "doctor", content: message },
       ]);
 
-      const response = await axios.post("/api/send_message", {
+      const response = await api.post("/api/send_message", {
         game_id: gameId,
         message: message,
       });
@@ -99,7 +105,7 @@ function App() {
       setIsLoading(true);
       setError("");
 
-      const response = await axios.post(`/api/save_conversation/${gameId}`);
+      const response = await api.post(`/api/save_conversation/${gameId}`);
 
       alert(`对话已保存至: ${response.data.filename}`);
     } catch (err) {

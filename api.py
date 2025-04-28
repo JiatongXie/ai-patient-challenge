@@ -18,7 +18,8 @@ from game_engine import (
 )
 
 app = Flask(__name__)
-CORS(app)  # 允许跨域请求
+# 配置CORS，允许本地开发的请求
+CORS(app, origins=["http://localhost:3000"], supports_credentials=False, methods=["GET", "POST", "OPTIONS"])
 
 # 存储游戏状态的字典
 active_games = {}
@@ -342,4 +343,4 @@ def get_active_games():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000) 
+    app.run(debug=True, host='0.0.0.0', port=5001) 
