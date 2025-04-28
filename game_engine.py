@@ -356,9 +356,24 @@ def patient_node(state: GameState, game_id=None) -> Dict:
 
     prompt = patient_prompt.format(messages=formatted_messages) + special_instruction
 
-    # 如果是游戏第一次开始，确保病人有一个友好的问候
+    # 如果是游戏第一次开始，确保病人有一个友好的问候，并基于初始症状
     if len(messages) <= 1:
-        greeting_prompt = "你是第一次去医院的病人，请用一句话友好地向医生问好，并简要描述你的主要症状。不要使用[询问身体:xxx]格式。"
+        # 获取初始症状信息
+        initial_symptoms = get_initial_symptoms(diagnosis, game_id)
+
+        # 记录初始症状到日志（如果有game_id）
+        if game_id and "api_logs" in globals() and game_id in globals()["api_logs"]:
+            globals()["api_logs"][game_id].append(f"初始症状信息:\n{initial_symptoms}")
+
+        # 构建包含初始症状的问候提示
+        greeting_prompt = f"""
+你是第一次去医院的病人，你感受到以下症状：
+
+{initial_symptoms}
+
+请用1-2句话友好地向医生问好，并简要描述你的主要症状。不要列出所有症状，只提及最明显的1-2个。
+不要使用[询问身体:xxx]格式。不要直接复制症状列表，要用自然的语言描述。
+"""
         content = invoke_llm(greeting_prompt, PATIENT_SYSTEM_MESSAGE, game_id)
     else:
         # 获取病人回复
@@ -401,6 +416,29 @@ def patient_node(state: GameState, game_id=None) -> Dict:
             "diagnosis": diagnosis,
             "game_over": False
         }
+
+def get_initial_symptoms(diagnosis: str, game_id=None) -> str:
+    """获取初始症状信息，用于游戏开始时"""
+    # 构建提示
+    prompt = f"""
+你代表病人的身体感官系统。病人得了{diagnosis}，但病人不知道自己的疾病名称。
+请提供与{diagnosis}相关的初始症状描述，使用简洁的要点形式。
+这些症状将作为病人的基础感受，帮助病人在游戏开始时能够描述自己的不适。
+请确保症状描述：
+1. 典型且明显，能够引导医生进行诊断
+2. 不要直接透露疾病名称
+3. 使用简洁的要点形式
+4. 包含2-4个主要症状
+"""
+
+    # 获取身体回复
+    content = invoke_llm(prompt, BODY_SYSTEM_MESSAGE + f"\n当前病名是：{diagnosis}。请描述初始症状。", game_id)
+
+    # 确保内容不为空
+    if not content.strip():
+        content = f"- 与{diagnosis}相关的典型症状\n- 具体表现为常见的不适感"
+
+    return content
 
 def body_node(state: GameState, game_id=None) -> Dict:
     """身体节点，生成身体感官响应"""
