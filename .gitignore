@@ -10,3 +10,4 @@ frontend/package-lock.json
 .DS_Store
 **/.DS_Store
 */.DS_Store
+.env2
