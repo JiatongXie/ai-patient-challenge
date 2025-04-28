@@ -627,9 +627,12 @@ def save_conversation(messages: List[Dict[str, Any]], game_log: List[str] = None
     # 创建保存目录
     os.makedirs("conversations", exist_ok=True)
 
-    # 生成文件名
+    # 生成文件名 (使用时间戳+随机ID确保按时间排序且不会重名)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"conversations/conversation_{timestamp}.txt"
+    # 生成一个简短的随机ID作为游戏ID
+    import uuid
+    game_id = str(uuid.uuid4())[:8]
+    filename = f"conversations/conversation_{timestamp}_{game_id}.txt"
 
     # 写入文件
     with open(filename, "w", encoding="utf-8") as f:

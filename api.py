@@ -43,8 +43,9 @@ def auto_save_conversation(game_id):
     # 创建保存目录
     os.makedirs("conversations", exist_ok=True)
 
-    # 生成文件名 (使用game_id确保同一对话使用同一文件)
-    filename = f"conversations/conversation_{game_id}.txt"
+    # 生成文件名 (使用时间戳+game_id确保按时间排序且不会重名)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"conversations/conversation_{timestamp}_{game_id}.txt"
 
     # 写入文件
     with open(filename, "w", encoding="utf-8") as f:
