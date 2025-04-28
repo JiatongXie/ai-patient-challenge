@@ -43,9 +43,29 @@ def auto_save_conversation(game_id):
     # 创建保存目录
     os.makedirs("conversations", exist_ok=True)
 
-    # 生成文件名 (使用时间戳+game_id确保按时间排序且不会重名)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"conversations/conversation_{timestamp}_{game_id}.txt"
+    # 存储游戏会话对话文件名的全局字典
+    if "game_conversation_files" not in globals():
+        globals()["game_conversation_files"] = {}
+
+    # 确定文件名
+    if game_id in globals()["game_conversation_files"]:
+        # 使用已存在的对话文件
+        filename = globals()["game_conversation_files"][game_id]
+    else:
+        # 查找是否已经存在该游戏ID的对话文件
+        import glob
+        existing_files = glob.glob(f"conversations/conversation_*_{game_id}.txt")
+
+        if existing_files:
+            # 如果找到现有文件，使用第一个找到的文件
+            filename = existing_files[0]
+        else:
+            # 生成新的文件名 (使用时间戳+game_id确保按时间排序且不会重名)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"conversations/conversation_{timestamp}_{game_id}.txt"
+
+        # 保存到全局字典中
+        globals()["game_conversation_files"][game_id] = filename
 
     # 写入文件
     with open(filename, "w", encoding="utf-8") as f:

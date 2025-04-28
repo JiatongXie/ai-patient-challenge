@@ -154,13 +154,10 @@ def save_api_log(log_data, game_id=None, call_id=None, timestamp=None):
     """
     import json
     import threading
+    import glob
 
     # 确保api_logs文件夹存在
     os.makedirs("api_logs", exist_ok=True)
-
-    # 如果没有提供时间戳，生成一个新的
-    if not timestamp:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # 如果没有提供调用ID，生成一个新的
     if not call_id:
@@ -171,8 +168,31 @@ def save_api_log(log_data, game_id=None, call_id=None, timestamp=None):
 
     with lock:
         if game_id:
-            # 直接使用时间戳+游戏ID命名文件，确保按时间排序且不会重名
-            log_file = f"api_logs/api_calls_{timestamp}_{game_id}.json"
+            # 存储游戏会话日志文件名的全局字典
+            if "game_log_files" not in globals():
+                globals()["game_log_files"] = {}
+
+            # 检查是否已经有该游戏ID的日志文件
+            if game_id in globals()["game_log_files"]:
+                # 使用已存在的日志文件
+                log_file = globals()["game_log_files"][game_id]
+            else:
+                # 查找是否已经存在该游戏ID的日志文件
+                existing_files = glob.glob(f"api_logs/api_calls_*_{game_id}.json")
+
+                if existing_files:
+                    # 如果找到现有文件，使用第一个找到的文件
+                    log_file = existing_files[0]
+                else:
+                    # 如果没有提供时间戳，生成一个新的
+                    if not timestamp:
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                    # 创建新的日志文件名
+                    log_file = f"api_logs/api_calls_{timestamp}_{game_id}.json"
+
+                # 保存到全局字典中
+                globals()["game_log_files"][game_id] = log_file
 
             try:
                 # 读取现有日志（如果存在）
@@ -198,11 +218,15 @@ def save_api_log(log_data, game_id=None, call_id=None, timestamp=None):
             except Exception as e:
                 print(f"保存游戏API日志时出错: {e}")
                 # 如果保存失败，回退到使用调用ID的文件名
+                if not timestamp:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 fallback_file = f"api_logs/api_call_{timestamp}_{call_id}.json"
                 with open(fallback_file, "w", encoding="utf-8") as f:
                     json.dump(log_data, f, ensure_ascii=False, indent=2)
         else:
             # 如果没有提供游戏ID，保存为单独的日志文件
+            if not timestamp:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             log_file = f"api_logs/api_call_{timestamp}_{call_id}.json"
             with open(log_file, "w", encoding="utf-8") as f:
                 json.dump(log_data, f, ensure_ascii=False, indent=2)
