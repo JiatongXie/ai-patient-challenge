@@ -28,6 +28,9 @@ active_games = {}
 # 存储API日志
 api_logs = {}
 
+# 存储最近的请求，用于去重
+recent_requests = {}
+
 # 自动保存对话函数
 def auto_save_conversation(game_id):
     """自动保存对话历史到服务器"""
@@ -96,6 +99,19 @@ def auto_save_conversation(game_id):
 @app.route('/api/new_game', methods=['POST'])
 def new_game():
     """创建一个新游戏"""
+    import time
+    import hashlib
+
+    # 生成请求ID（基于客户端IP和时间戳）
+    client_ip = request.remote_addr
+    timestamp = int(time.time())
+    request_id = hashlib.md5(f"{client_ip}:{timestamp // 2}".encode()).hexdigest()  # 每2秒内的请求视为相同请求
+
+    # 检查是否是重复请求
+    if request_id in recent_requests:
+        print(f"检测到重复的new_game请求，返回缓存的响应: {request_id}")
+        return jsonify(recent_requests[request_id])
+
     # 可选的疾病列表
     diseases = [
         "流感", "肺炎", "胃溃疡", "偏头痛", "扁桃体炎",
@@ -154,6 +170,16 @@ def new_game():
         "game_over": False
     }
 
+    # 缓存响应，防止重复请求
+    recent_requests[request_id] = response
+
+    # 清理旧的请求缓存（只保留最近的100个请求）
+    if len(recent_requests) > 100:
+        # 删除最旧的请求
+        oldest_key = next(iter(recent_requests))
+        del recent_requests[oldest_key]
+
+    print(f"创建新游戏成功，请求ID: {request_id}, 游戏ID: {game_id}")
     return jsonify(response)
 
 @app.route('/api/send_message', methods=['POST'])
