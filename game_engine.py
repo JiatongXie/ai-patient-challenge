@@ -54,12 +54,48 @@ def invoke_llm(prompt, system_message="你是一个AI助手", game_id=None):
     if "api_logs_ids" not in globals():
         globals()["api_logs_ids"] = set()
 
-    # 如果相同的请求已经发过，则添加标记
+    # 使用缓存避免重复API调用
+    if "api_response_cache" not in globals():
+        globals()["api_response_cache"] = {}
+
+    # 如果相同的请求已经发过，则使用缓存的结果
     is_duplicate = False
     if call_id in globals()["api_logs_ids"]:
         api_log = f"[{api_call_time}] ‼️ 重复API请求 ID:{call_id}\n系统消息: {system_message}\n用户消息: {prompt}\n"
-        print(f"警告：检测到重复API调用 ID:{call_id}")
+        print(f"警告：检测到重复API调用 ID:{call_id}，使用缓存结果")
         is_duplicate = True
+
+        # 如果有缓存的响应，直接使用
+        if call_id in globals()["api_response_cache"]:
+            response_content = globals()["api_response_cache"][call_id]
+            print(f"使用缓存的API响应: {call_id}")
+
+            # 记录API返回结果（从缓存）
+            api_log += f"API返回(缓存): {response_content}\n{'='*50}\n"
+
+            # 将API调用记录添加到全局日志
+            if "api_logs" not in globals():
+                globals()["api_logs"] = []
+            globals()["api_logs"].append(api_log)
+
+            # 创建详细的API调用日志数据
+            log_data = {
+                "timestamp": api_call_time,
+                "call_id": call_id,
+                "is_duplicate": is_duplicate,
+                "input": {
+                    "system_message": system_message,
+                    "user_message": prompt
+                },
+                "output": response_content,
+                "model": os.getenv("MODEL_ID", "未指定模型"),
+                "from_cache": True
+            }
+
+            # 保存日志到文件
+            save_api_log(log_data, game_id, call_id, api_call_timestamp)
+
+            return response_content
 
     # 将调用ID添加到已调用集合
     globals()["api_logs_ids"].add(call_id)
@@ -75,6 +111,9 @@ def invoke_llm(prompt, system_message="你是一个AI助手", game_id=None):
 
     # 获取回复内容
     response_content = response.choices[0].message.content
+
+    # 缓存响应
+    globals()["api_response_cache"][call_id] = response_content
 
     # 记录API返回结果
     api_log += f"API返回: {response_content}\n{'='*50}\n"
@@ -94,7 +133,8 @@ def invoke_llm(prompt, system_message="你是一个AI助手", game_id=None):
             "user_message": prompt
         },
         "output": response_content,
-        "model": os.getenv("MODEL_ID", "未指定模型")
+        "model": os.getenv("MODEL_ID", "未指定模型"),
+        "from_cache": False  # 标记这是一个新的API调用，不是从缓存获取的
     }
 
     # 保存日志到文件
@@ -419,6 +459,18 @@ def patient_node(state: GameState, game_id=None) -> Dict:
 
 def get_initial_symptoms(diagnosis: str, game_id=None) -> str:
     """获取初始症状信息，用于游戏开始时"""
+    # 使用缓存避免重复调用
+    if "initial_symptoms_cache" not in globals():
+        globals()["initial_symptoms_cache"] = {}
+
+    # 生成缓存键
+    cache_key = f"{diagnosis}_{game_id}" if game_id else diagnosis
+
+    # 检查缓存中是否已有结果
+    if cache_key in globals()["initial_symptoms_cache"]:
+        print(f"使用缓存的初始症状: {cache_key}")
+        return globals()["initial_symptoms_cache"][cache_key]
+
     # 构建提示
     prompt = f"""
 你代表病人的身体感官系统。病人得了{diagnosis}，但病人不知道自己的疾病名称。
@@ -437,6 +489,9 @@ def get_initial_symptoms(diagnosis: str, game_id=None) -> str:
     # 确保内容不为空
     if not content.strip():
         content = f"- 与{diagnosis}相关的典型症状\n- 具体表现为常见的不适感"
+
+    # 保存到缓存
+    globals()["initial_symptoms_cache"][cache_key] = content
 
     return content
 
