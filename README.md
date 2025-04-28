@@ -4,7 +4,7 @@
 
 ## 游戏截图
 
-![游戏界面截图](screenshot.jpeg)
+![游戏界面截图](screenshot.png)
 
 ## 项目结构
 
