@@ -391,33 +391,13 @@ def patient_node(state: GameState, game_id=None) -> Dict:
             "game_over": False
         }
 
-    # 检查医生是否刚才给出了诊断
-    doctor_gave_diagnosis = False
-    doctor_message = ""
-
-    # 查找最后一条医生消息
-    for msg in reversed(messages):
-        if msg["sender"] == "doctor":
-            doctor_message = msg["content"]
-            # 检查医生消息是否包含可能的诊断
-            diagnosis_terms = ["诊断", "判断", "认为", "确定", "可能是", "应该是", "我觉得是", "你有", "你患了"]
-            doctor_gave_diagnosis = any(term in doctor_message for term in diagnosis_terms) or diagnosis.lower() in doctor_message.lower()
-            break
+    # 不再检查医生是否给出诊断，让患者自己判断如何回应
 
     # 构建提示
     formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages])
 
-    special_instruction = ""
-    if doctor_gave_diagnosis:
-        special_instruction = """
-医生似乎给出了诊断。作为病人，你不知道这个诊断是否正确。你可以:
-1. 询问医生这意味着什么，或该如何治疗
-2. 表达对诊断的疑惑或担忧
-3. 询问医生是否确定
-但记住，你不具备专业知识来评判诊断的正确性。
-"""
-
-    prompt = patient_prompt.format(messages=formatted_messages) + special_instruction
+    # 不再添加特殊指令，让患者自己判断如何回应医生
+    prompt = patient_prompt.format(messages=formatted_messages)
 
     # 如果是游戏第一次开始，确保病人有一个友好的问候，并基于初始症状
     if len(messages) <= 1:
@@ -596,9 +576,16 @@ def system_node(state: GameState, game_id=None) -> Dict:
     # 检查是否是医生消息，以及是否可能包含诊断
     diagnosis_result = None
     if current_message["sender"] == "doctor":
-        # 检查是否包含疾病名称或诊断相关词语
-        message_text = current_message["content"].lower()
-        if (diagnosis.lower() in message_text) or any(term in message_text for term in ["诊断", "判断", "认为", "确定", "可能是", "应该是", "我觉得是", "你有", "你患了"]):
+        # 根据配置决定是否使用关键词判断或直接使用LLM判断
+        should_check_diagnosis = True
+
+        if GAME_CONFIG["use_keyword_diagnosis_check"]:
+            # 使用关键词判断是否包含诊断相关词语
+            message_text = current_message["content"].lower()
+            should_check_diagnosis = (diagnosis.lower() in message_text) or any(term in message_text for term in ["诊断", "判断", "认为", "确定", "可能是", "应该是", "我觉得是", "你有", "你患了"])
+
+        # 如果需要检查诊断（关键词判断为真或配置为不使用关键词判断）
+        if should_check_diagnosis:
             # 构建特殊提示来检查诊断是否正确
             diagnosis_prompt = f"""
 医生的消息: "{current_message['content']}"
