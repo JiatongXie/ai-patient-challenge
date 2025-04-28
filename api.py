@@ -136,6 +136,14 @@ def new_game():
     active_games[game_id] = initial_state
     api_logs[game_id] = []
 
+    # 记录游戏开始和诊断信息
+    api_logs[game_id].append(f"游戏开始，诊断为: {diagnosis}")
+
+    # 获取初始症状信息
+    from game_engine import get_initial_symptoms
+    initial_symptoms = get_initial_symptoms(diagnosis, game_id)
+    api_logs[game_id].append(f"初始症状信息:\n{initial_symptoms}")
+
     # 生成病人的初始消息
     patient_state = patient_node(initial_state, game_id)
 
