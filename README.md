@@ -171,9 +171,17 @@ npm start
 ARK_API_KEY=your_api_key_here
 API_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 MODEL_ID=your_model_id
+
+# 游戏配置选项
+# 是否使用LLM检查患者回复的合理性（true/false，默认为false）
+CHECK_PATIENT_RESPONSE=false
 ```
 
 请确保替换`ARK_API_KEY`为您的实际 API 密钥。
+
+#### 游戏配置说明
+
+- `CHECK_PATIENT_RESPONSE`: 设置为`true`时，系统会使用 LLM 检查患者回复的合理性，确保患者不会透露疾病名称或使用不合理的回复。设置为`false`时，跳过这一检查，可以减少 API 调用次数，提高游戏速度。默认为`false`。
 
 ## 游戏记录
 
