@@ -27,6 +27,71 @@ active_games = {}
 # 存储API日志
 api_logs = {}
 
+# 自动保存对话函数
+def auto_save_conversation(game_id):
+    """自动保存对话历史到服务器"""
+    if game_id not in active_games:
+        return None
+    
+    state = active_games[game_id]
+    logs = api_logs.get(game_id, [])
+    
+    # 创建保存目录
+    os.makedirs("conversations", exist_ok=True)
+    
+    # 生成文件名 (使用game_id确保同一对话使用同一文件)
+    filename = f"conversations/conversation_{game_id}.txt"
+    
+    # 写入文件
+    with open(filename, "w", encoding="utf-8") as f:
+        # 写入标题
+        f.write("="*70 + "\n")
+        f.write(" "*20 + "AI问诊小游戏记录\n")
+        f.write("="*70 + "\n\n")
+        
+        # 写入对话历史
+        f.write("## 对话内容\n")
+        f.write("-"*70 + "\n\n")
+        
+        # 清理病人消息中可能的询问身体内容
+        messages_to_save = []
+        for msg in state["messages"]:
+            if msg["sender"] == "patient":
+                # 复制消息以避免修改原始状态
+                new_msg = msg.copy()
+                # 清理询问身体内容
+                new_msg["content"] = re.sub(r'\[询问身体:.*?\]', '', new_msg["content"]).strip()
+                messages_to_save.append(new_msg)
+            elif msg["sender"] != "body":  # 排除身体消息
+                messages_to_save.append(msg)
+        
+        # 写入清理后的消息
+        for msg in messages_to_save:
+            # 只显示医生、病人和最终的系统消息
+            if msg["sender"] in ["doctor", "patient"] or (msg["sender"] == "system" and "恭喜" in msg["content"]):
+                sender = msg["sender"].upper()
+                if sender == "PATIENT":
+                    sender = "👤 病人"
+                elif sender == "DOCTOR":
+                    sender = "👨‍⚕️ 医生"
+                elif sender == "SYSTEM":
+                    sender = "🎮 系统"
+                
+                f.write(f"{sender}：{msg['content']}\n\n")
+        
+        # 写入游戏日志
+        if logs:
+            f.write("\n\n## 游戏日志\n")
+            f.write("-"*70 + "\n\n")
+            for log in logs:
+                f.write(log + "\n\n")
+        
+        # 写入时间戳
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        f.write(f"\n最后更新时间: {timestamp}\n")
+    
+    return filename
+
 @app.route('/api/new_game', methods=['POST'])
 def new_game():
     """创建一个新游戏"""
@@ -77,6 +142,9 @@ def new_game():
         "game_over": False
     }
     
+    # 自动保存对话
+    auto_save_conversation(game_id)
+    
     # 返回游戏信息和初始消息
     response = {
         "game_id": game_id,
@@ -122,6 +190,9 @@ def send_message():
     # 检查游戏是否结束
     if system_state.get("game_over", False):
         active_games[game_id] = system_state
+        
+        # 自动保存对话
+        auto_save_conversation(game_id)
         
         # 返回游戏结束信息
         return jsonify({
@@ -196,6 +267,9 @@ def send_message():
                 # 更新游戏状态
                 active_games[game_id] = final_state
                 
+                # 自动保存对话
+                auto_save_conversation(game_id)
+                
                 # 过滤所有空白消息
                 messages_to_return = []
                 for msg in final_state["messages"]:
@@ -220,6 +294,9 @@ def send_message():
     
     # 更新游戏状态
     active_games[game_id] = final_state
+    
+    # 自动保存对话
+    auto_save_conversation(game_id)
     
     # 过滤所有空白消息和身体消息
     messages_to_return = []
@@ -263,67 +340,24 @@ def get_logs(game_id):
 
 @app.route('/api/save_conversation/<game_id>', methods=['POST'])
 def save_conversation(game_id):
-    """保存对话历史"""
+    """保存对话历史并返回下载链接"""
     if game_id not in active_games:
         return jsonify({"error": "Game not found"}), 404
     
-    state = active_games[game_id]
-    logs = api_logs.get(game_id, [])
+    # 使用自动保存函数保存文件
+    filename = auto_save_conversation(game_id)
     
-    # 创建保存目录
-    os.makedirs("conversations", exist_ok=True)
+    if not filename:
+        return jsonify({"error": "保存失败"}), 500
     
-    # 生成文件名
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"conversations/conversation_{timestamp}.txt"
-    
-    # 写入文件
-    with open(filename, "w", encoding="utf-8") as f:
-        # 写入标题
-        f.write("="*70 + "\n")
-        f.write(" "*20 + "AI问诊小游戏记录\n")
-        f.write("="*70 + "\n\n")
-        
-        # 写入对话历史
-        f.write("## 对话内容\n")
-        f.write("-"*70 + "\n\n")
-        
-        # 清理病人消息中可能的询问身体内容
-        messages_to_save = []
-        for msg in state["messages"]:
-            if msg["sender"] == "patient":
-                # 复制消息以避免修改原始状态
-                new_msg = msg.copy()
-                # 清理询问身体内容
-                new_msg["content"] = re.sub(r'\[询问身体:.*?\]', '', new_msg["content"]).strip()
-                messages_to_save.append(new_msg)
-            elif msg["sender"] != "body":  # 排除身体消息
-                messages_to_save.append(msg)
-        
-        # 写入清理后的消息
-        for msg in messages_to_save:
-            # 只显示医生、病人和最终的系统消息
-            if msg["sender"] in ["doctor", "patient"] or (msg["sender"] == "system" and "恭喜" in msg["content"]):
-                sender = msg["sender"].upper()
-                if sender == "PATIENT":
-                    sender = "👤 病人"
-                elif sender == "DOCTOR":
-                    sender = "👨‍⚕️ 医生"
-                elif sender == "SYSTEM":
-                    sender = "🎮 系统"
-                
-                f.write(f"{sender}：{msg['content']}\n\n")
-        
-        # 写入游戏日志
-        if logs:
-            f.write("\n\n## 游戏日志\n")
-            f.write("-"*70 + "\n\n")
-            for log in logs:
-                f.write(log + "\n\n")
+    # 创建文件内容字符串用于前端下载
+    with open(filename, "r", encoding="utf-8") as f:
+        conversation_text = f.read()
     
     return jsonify({
         "filename": filename,
-        "message": "对话已保存"
+        "message": "对话已保存",
+        "conversation_text": conversation_text
     })
 
 @app.route('/api/active_games', methods=['GET'])

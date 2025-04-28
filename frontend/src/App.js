@@ -107,7 +107,34 @@ function App() {
 
       const response = await api.post(`/api/save_conversation/${gameId}`);
 
-      alert(`对话已保存至: ${response.data.filename}`);
+      // 创建Blob对象
+      const blob = new Blob([response.data.conversation_text], {
+        type: "text/plain;charset=utf-8",
+      });
+
+      // 创建临时下载链接
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+
+      // 设置文件名 - 使用日期时间
+      const now = new Date();
+      const fileName = `AI问诊记录_${now.getFullYear()}${(now.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}_${now
+        .getHours()
+        .toString()
+        .padStart(2, "0")}${now.getMinutes().toString().padStart(2, "0")}.txt`;
+      a.download = fileName;
+
+      // 添加到DOM、点击并移除
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      alert(`对话已保存并开始下载: ${fileName}`);
     } catch (err) {
       setError("保存对话失败，请重试！");
       console.error("保存对话失败:", err);
