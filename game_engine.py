@@ -20,7 +20,7 @@ class GameState(TypedDict):
 # 创建OpenAI客户端
 client = OpenAI(
     base_url=os.getenv("API_BASE_URL"),
-    api_key=os.getenv("ARK_API_KEY"),
+    api_key=os.getenv("API_KEY"),
 )
 
 # 自定义LLM函数，使用OpenAI客户端
