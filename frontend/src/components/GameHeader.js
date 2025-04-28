@@ -91,7 +91,7 @@ const GameHeader = ({ gameOver, diagnosis, isLoading, currentSender }) => {
           </StatusIndicator>
           <span style={{ margin: "0 8px" }}>•</span>
           <StatusIndicator active={currentSender === "doctor"}>
-            <PulsingDot pulsing={currentSender === "doctor"} />
+            <PulsingDot pulsing={!isLoading && currentSender === "doctor"} />
             <span>医生</span>
           </StatusIndicator>
         </StatusBar>
