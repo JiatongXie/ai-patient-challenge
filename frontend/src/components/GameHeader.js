@@ -88,7 +88,7 @@ const GameHeader = ({ gameOver, diagnosis, isLoading, currentSender }) => {
       <Title>AI问诊小游戏</Title>
 
       <GithubLink
-        href="https://github.com/JiatongXie/ai-patient-challenge"
+        href="https://github.com/metrovoc/ai-patient-challenge"
         target="_blank"
         rel="noopener noreferrer"
         title="查看源代码"
