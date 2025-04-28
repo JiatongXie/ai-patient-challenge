@@ -10,7 +10,7 @@ from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
 
 # 加载环境变量
-load_dotenv()
+load_dotenv(override=True)
 
 # 定义状态类型
 class GameState(TypedDict):
