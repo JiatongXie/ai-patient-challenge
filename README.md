@@ -4,7 +4,7 @@
 
 ## 游戏截图
 
-![游戏界面截图](screenshot.png)
+<img src="screenshot.png" width="300" alt="游戏界面截图"/>
 
 ## 项目结构
 
