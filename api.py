@@ -143,7 +143,7 @@ def new_game():
 
     # 创建初始状态
     initial_state = {
-        "messages": [{"sender": "system", "content": "游戏开始，病人即将进入诊室。"}],
+        "messages": [{"sender": "system", "content": "游戏开始，请为来到诊室的病人诊断病情"}],
         "current_sender": "patient",
         "diagnosis": diagnosis,
         "game_over": False
