@@ -57,23 +57,40 @@ const LoadingSpinner = styled.div`
   justify-content: center;
   padding: 4px 0;
 
-  &::after {
-    content: "";
-    display: block;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    border: 2px solid rgba(0, 0, 0, 0.1);
-    border-top-color: rgba(0, 0, 0, 0.4);
-    animation: spin 0.8s linear infinite;
+  /* 微信语音效果样式 */
+  & {
+    display: inline-flex;
+    align-items: center;
   }
 
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
+  & span {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin: 0 2px;
+    background-color: #1677ff;
+    border-radius: 50%;
+    opacity: 0.6;
+    animation: wechatVoice 1.4s infinite ease-in-out;
+  }
+
+  & span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  & span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes wechatVoice {
+    0%,
+    60%,
     100% {
-      transform: rotate(360deg);
+      transform: scale(1);
+    }
+    30% {
+      transform: scale(1.5);
+      opacity: 1;
     }
   }
 `;
@@ -105,7 +122,15 @@ const ChatMessage = ({ sender, content, isLatest, isLoading }) => {
       <Avatar isDoctor={isDoctor}>{avatarText}</Avatar>
       <MessageBubble isDoctor={isDoctor}>
         <MessageContent>
-          {isLoading ? <LoadingSpinner /> : content}
+          {isLoading ? (
+            <LoadingSpinner>
+              <span></span>
+              <span></span>
+              <span></span>
+            </LoadingSpinner>
+          ) : (
+            content
+          )}
         </MessageContent>
       </MessageBubble>
     </MessageContainer>

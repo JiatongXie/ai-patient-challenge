@@ -335,6 +335,24 @@ def send_message():
                 # 系统验证最终的病人消息
                 final_state = system_node(final_patient_state, game_id)
 
+                # 检查是否需要再次验证病人回复
+                # 如果system_node返回的current_sender是system，说明需要再次验证
+                retry_count = 0
+                max_retries = 3  # 设置最大重试次数，防止无限循环
+
+                while final_state.get("current_sender") == "system" and retry_count < max_retries:
+                    # 记录重试信息
+                    api_logs[game_id].append(f"重新验证基于身体感知的病人回复 (第{retry_count+1}次)")
+
+                    # 再次调用system_node进行验证
+                    final_state = system_node(final_state, game_id)
+                    retry_count += 1
+
+                # 如果经过多次重试后仍然是system状态，强制设为doctor以避免卡住
+                if final_state.get("current_sender") == "system":
+                    api_logs[game_id].append("警告：多次重试后基于身体感知的回复仍未通过验证，强制设置为医生回合")
+                    final_state["current_sender"] = "doctor"
+
                 # 更新游戏状态
                 active_games[game_id] = final_state
 
@@ -375,6 +393,24 @@ def send_message():
 
     # 如果没有询问身体或询问身体过程有问题，走普通流程
     final_state = system_node(patient_state, game_id)
+
+    # 检查是否需要再次验证病人回复
+    # 如果system_node返回的current_sender是system，说明需要再次验证
+    retry_count = 0
+    max_retries = 3  # 设置最大重试次数，防止无限循环
+
+    while final_state.get("current_sender") == "system" and retry_count < max_retries:
+        # 记录重试信息
+        api_logs[game_id].append(f"重新验证病人回复 (第{retry_count+1}次)")
+
+        # 再次调用system_node进行验证
+        final_state = system_node(final_state, game_id)
+        retry_count += 1
+
+    # 如果经过多次重试后仍然是system状态，强制设为doctor以避免卡住
+    if final_state.get("current_sender") == "system":
+        api_logs[game_id].append("警告：多次重试后仍未通过验证，强制设置为医生回合")
+        final_state["current_sender"] = "doctor"
 
     # 更新游戏状态
     active_games[game_id] = final_state

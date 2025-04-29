@@ -11,7 +11,7 @@
 ```
 ├── api.py              # Flask后端API
 ├── game_engine.py      # 游戏核心逻辑
-├── doctor_game.py      # 原命令行版本游戏
+├── doctor_game.py      # 原命令行版本游戏 (已删除)
 ├── requirements.txt    # Python依赖
 ├── dotenv.sample       # 环境变量模板
 └── frontend/           # React前端

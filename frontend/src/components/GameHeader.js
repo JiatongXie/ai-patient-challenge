@@ -102,8 +102,7 @@ const GameHeader = ({
         <i className="fab fa-github"></i>
       </GithubLink>
 
-      {!gameStarted ? // 游戏未开始时不显示状态栏
-      null : gameOver ? (
+      {!gameStarted ? null : gameOver ? ( // 游戏未开始时不显示状态栏
         <div>
           <StatusBar>
             <StatusIndicator active={true}>
@@ -115,15 +114,13 @@ const GameHeader = ({
         </div>
       ) : (
         <StatusBar>
-          <StatusIndicator active={currentSender === "patient"}>
-            <PulsingDot pulsing={isLoading && currentSender === "patient"} />
-            <span>
-              病人{isLoading && currentSender === "patient" ? "思考中..." : ""}
-            </span>
+          <StatusIndicator active={currentSender === "patient" || isLoading}>
+            <PulsingDot pulsing={isLoading} />
+            <span>病人{isLoading ? "思考中..." : ""}</span>
           </StatusIndicator>
           <span style={{ margin: "0 8px" }}>•</span>
-          <StatusIndicator active={currentSender === "doctor"}>
-            <PulsingDot pulsing={!isLoading && currentSender === "doctor"} />
+          <StatusIndicator active={currentSender === "doctor" && !isLoading}>
+            <PulsingDot pulsing={currentSender === "doctor" && !isLoading} />
             <span>医生</span>
           </StatusIndicator>
         </StatusBar>
