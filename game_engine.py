@@ -737,12 +737,10 @@ def system_node(state: GameState, game_id=None) -> Dict:
                 # 病人消息不合理，需要重新生成
                 # 创建一个特殊提示来生成更合理的病人回复
                 fix_prompt = f"""
-前一条病人消息被系统判断为不合理，原因是: {system_response}
+前一条病人消息被系统判断为不合理，系统的回复是:{system_response}
 
 请根据以下对话历史，生成一个新的合理病人回复:
 {formatted_messages}
-
-问题原因总结: {system_response}
 
 重新以病人身份回复，确保:
 1. 不透露疾病名称
