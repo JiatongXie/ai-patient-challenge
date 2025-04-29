@@ -236,38 +236,19 @@ def save_api_log(log_data, game_id=None, call_id=None, timestamp=None):
 
 # 病人角色
 patient_prompt = PromptTemplate.from_template("""
-你是一位去医院就诊的病人。你不知道自己得了什么病，但你能感受到身体的症状。
-你需要向医生描述你的症状，并回答医生的问题。
-
 当前对话历史:
 {messages}
-
-请以病人的身份回复医生的问题或发起对话。
-
-如果你想了解更多身体症状，你可以使用特殊格式"[询问身体:具体的问题]"来询问自己的身体感受。
-重要规则：
-1. 如果你决定询问身体，你的输出应该只包含询问身体的内容，不要在同一条消息中既回复医生又询问身体
-2. 询问身体结束后，你会收到身体的反馈，然后再基于这些反馈回复医生
 """)
 
 # 身体角色
 body_prompt = PromptTemplate.from_template("""
-你代表病人的身体感官系统。你知道病人得了{diagnosis}，但你只能提供相关的症状感受，不能直接说出疾病名称。
-
-当前对话历史:
-{messages}
-
-病人正在询问自己的身体感受，请使用简洁的要点形式描述与{diagnosis}相关的症状。
-不要使用对话格式，不要称呼医生或病人，只需直接描述症状感受。
+病人的疾病:{diagnosis}
+当前对话历史:{messages}
 """)
 
 # 系统角色
 system_prompt = PromptTemplate.from_template("""
-你是问诊游戏的系统，负责判断游戏是否结束，以及检查各方回复的格式。你的输出要简短并遵循格式。
-
-当前对话历史:
-{messages}
-
+当前对话历史:{messages}
 当前消息: {current_message}
 发送者: {sender}
 
