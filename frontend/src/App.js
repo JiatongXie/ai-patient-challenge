@@ -24,6 +24,58 @@ const Container = styled.div`
   border-right: 1px solid #e0e0e0;
 `;
 
+const StartGameContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 20px;
+  background-color: #ededed;
+`;
+
+const StartGameButton = styled.button`
+  background-color: #07c160;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-top: 20px;
+  box-shadow: 0 2px 8px rgba(7, 193, 96, 0.3);
+
+  &:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(7, 193, 96, 0.4);
+  }
+
+  &:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 4px rgba(7, 193, 96, 0.3);
+  }
+`;
+
+const GameDescription = styled.div`
+  text-align: center;
+  margin-bottom: 30px;
+  max-width: 400px;
+
+  h2 {
+    color: #07c160;
+    margin-bottom: 16px;
+  }
+
+  p {
+    color: #666;
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+`;
+
 const ChatContainer = styled.div`
   flex: 1;
   padding: 16px;
@@ -39,9 +91,9 @@ function App() {
   const [currentSender, setCurrentSender] = useState("doctor");
   const [diagnosis, setDiagnosis] = useState("");
   const [error, setError] = useState("");
+  const [gameStarted, setGameStarted] = useState(false);
 
   const chatContainerRef = useRef(null);
-  const gameInitializedRef = useRef(false);
 
   // 创建新游戏
   const startNewGame = async () => {
@@ -57,6 +109,7 @@ function App() {
       setCurrentSender(response.data.current_sender || "doctor");
       setGameOver(response.data.game_over);
       setDiagnosis("");
+      setGameStarted(true);
     } catch (err) {
       setError("创建游戏失败，请重试！");
       console.error("创建游戏失败:", err);
@@ -249,18 +302,23 @@ function App() {
     }
   }, [messages]);
 
-  // 初始加载时创建新游戏
+  // 不再在初始加载时自动创建新游戏
   useEffect(() => {
-    // 防止在严格模式下重复初始化游戏
-    if (!gameInitializedRef.current) {
-      gameInitializedRef.current = true;
-      startNewGame();
+    // 游戏开始后，滚动到最新消息
+    if (gameStarted && chatContainerRef.current) {
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
     }
-  }, []);
+  }, [gameStarted]);
 
   // 处理新游戏按钮点击
   const handleNewGame = () => {
     // 允许创建新游戏
+    startNewGame();
+  };
+
+  // 处理开始游戏按钮点击
+  const handleStartGame = () => {
     startNewGame();
   };
 
@@ -271,40 +329,68 @@ function App() {
         diagnosis={diagnosis}
         isLoading={isLoading}
         currentSender={currentSender}
+        gameStarted={gameStarted}
       />
 
-      <ChatContainer ref={chatContainerRef} className="chat-container">
-        {messages.map((message, index) => (
-          <ChatMessage
-            key={index}
-            sender={message.sender}
-            content={message.content}
+      {!gameStarted ? (
+        <StartGameContainer>
+          <GameDescription>
+            <h2>欢迎来到AI问诊小游戏</h2>
+            <p>
+              在这个游戏中，你将扮演一名医生，与AI扮演的患者进行对话，尝试诊断出患者的疾病。
+            </p>
+            <p>通过提问了解症状，分析病情，最终给出正确的诊断。</p>
+            <p>点击下方按钮开始游戏！</p>
+          </GameDescription>
+          <StartGameButton onClick={handleStartGame} disabled={isLoading}>
+            {isLoading ? "正在加载..." : "开始游戏"}
+          </StartGameButton>
+          {error && (
+            <div
+              style={{ color: "red", textAlign: "center", margin: "20px 0" }}
+            >
+              {error}
+            </div>
+          )}
+        </StartGameContainer>
+      ) : (
+        <>
+          <ChatContainer ref={chatContainerRef} className="chat-container">
+            {messages.map((message, index) => (
+              <ChatMessage
+                key={index}
+                sender={message.sender}
+                content={message.content}
+              />
+            ))}
+
+            {isLoading && (
+              <ChatMessage sender="patient" content="" isLoading={true} />
+            )}
+
+            {error && (
+              <div
+                style={{ color: "red", textAlign: "center", margin: "10px 0" }}
+              >
+                {error}
+              </div>
+            )}
+          </ChatContainer>
+
+          <MessageInput
+            onSendMessage={sendMessage}
+            disabled={isLoading || gameOver || currentSender !== "doctor"}
           />
-        ))}
 
-        {isLoading && (
-          <ChatMessage sender="patient" content="" isLoading={true} />
-        )}
-
-        {error && (
-          <div style={{ color: "red", textAlign: "center", margin: "10px 0" }}>
-            {error}
-          </div>
-        )}
-      </ChatContainer>
-
-      <MessageInput
-        onSendMessage={sendMessage}
-        disabled={isLoading || gameOver || currentSender !== "doctor"}
-      />
-
-      <GameControls
-        onNewGame={handleNewGame}
-        onSaveConversation={saveConversation}
-        onSaveAsImage={saveConversationAsImage}
-        gameOver={gameOver}
-        disabled={isLoading}
-      />
+          <GameControls
+            onNewGame={handleNewGame}
+            onSaveConversation={saveConversation}
+            onSaveAsImage={saveConversationAsImage}
+            gameOver={gameOver}
+            disabled={isLoading}
+          />
+        </>
+      )}
     </Container>
   );
 }

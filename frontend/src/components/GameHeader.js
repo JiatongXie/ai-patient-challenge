@@ -82,7 +82,13 @@ const DiagnosisText = styled.div`
   display: inline-block;
 `;
 
-const GameHeader = ({ gameOver, diagnosis, isLoading, currentSender }) => {
+const GameHeader = ({
+  gameOver,
+  diagnosis,
+  isLoading,
+  currentSender,
+  gameStarted,
+}) => {
   return (
     <HeaderContainer>
       <Title>AI问诊小游戏</Title>
@@ -96,7 +102,8 @@ const GameHeader = ({ gameOver, diagnosis, isLoading, currentSender }) => {
         <i className="fab fa-github"></i>
       </GithubLink>
 
-      {gameOver ? (
+      {!gameStarted ? // 游戏未开始时不显示状态栏
+      null : gameOver ? (
         <div>
           <StatusBar>
             <StatusIndicator active={true}>
