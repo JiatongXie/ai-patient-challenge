@@ -32,6 +32,63 @@ api_logs = {}
 # 存储最近的请求，用于去重
 recent_requests = {}
 
+# 存储疾病统计数据的字典 {疾病名称: {"attempts": 尝试次数, "correct": 正确次数}}
+disease_stats = {}
+
+# 加载疾病统计数据
+def load_disease_stats():
+    """从文件加载疾病统计数据"""
+    global disease_stats
+    stats_file = "disease_stats.json"
+
+    if os.path.exists(stats_file):
+        try:
+            with open(stats_file, "r", encoding="utf-8") as f:
+                disease_stats = json.load(f)
+            print(f"已加载疾病统计数据: {len(disease_stats)}个疾病")
+        except Exception as e:
+            print(f"加载疾病统计数据失败: {e}")
+            disease_stats = {}
+
+    # 确保所有配置中的疾病都有统计数据
+    for disease in GAME_CONFIG["diseases"]:
+        if disease not in disease_stats:
+            disease_stats[disease] = {"attempts": 0, "correct": 0}
+
+# 保存疾病统计数据
+def save_disease_stats():
+    """将疾病统计数据保存到文件"""
+    stats_file = "disease_stats.json"
+    try:
+        with open(stats_file, "w", encoding="utf-8") as f:
+            json.dump(disease_stats, f, ensure_ascii=False, indent=2)
+        print("疾病统计数据已保存")
+    except Exception as e:
+        print(f"保存疾病统计数据失败: {e}")
+
+# 更新疾病统计数据
+def update_disease_stats(disease, is_correct):
+    """更新疾病统计数据
+
+    Args:
+        disease: 疾病名称
+        is_correct: 是否正确诊断
+    """
+    global disease_stats
+
+    if disease not in disease_stats:
+        disease_stats[disease] = {"attempts": 0, "correct": 0}
+
+    disease_stats[disease]["attempts"] += 1
+    if is_correct:
+        disease_stats[disease]["correct"] += 1
+
+    # 保存更新后的统计数据
+    save_disease_stats()
+
+# 初始化时加载统计数据
+load_disease_stats()
+
 # 自动保存对话函数
 def auto_save_conversation(game_id):
     """自动保存对话历史到服务器"""
@@ -295,12 +352,25 @@ def send_message():
         # 自动保存对话
         auto_save_conversation(game_id)
 
+        # 更新疾病统计数据
+        diagnosis = system_state.get("diagnosis")
+        if diagnosis:
+            # 检查是否是正确诊断（通过查找系统消息中的"恭喜"字样）
+            is_correct = False
+            for msg in system_state["messages"]:
+                if msg["sender"] == "system" and "恭喜" in msg["content"]:
+                    is_correct = True
+                    break
+
+            # 更新统计数据
+            update_disease_stats(diagnosis, is_correct)
+
         # 返回游戏结束信息
         return jsonify({
             "messages": [msg for msg in system_state["messages"] if msg["sender"] != "body"],
             "current_sender": "system",
             "game_over": True,
-            "diagnosis": system_state.get("diagnosis")
+            "diagnosis": diagnosis
         })
 
     # 如果不是病人回合，直接返回系统状态
@@ -579,6 +649,57 @@ def get_active_games():
 
     return jsonify({
         "games": games
+    })
+
+@app.route('/api/disease_stats', methods=['GET'])
+def get_all_disease_stats():
+    """获取所有疾病的统计数据"""
+    return jsonify({
+        "stats": disease_stats
+    })
+
+@app.route('/api/disease_stats/<disease>', methods=['GET'])
+def get_disease_stats(disease):
+    """获取特定疾病的统计数据"""
+    if disease not in disease_stats:
+        return jsonify({"error": "Disease not found"}), 404
+
+    stats = disease_stats[disease]
+    attempts = stats["attempts"]
+    correct = stats["correct"]
+
+    # 计算正确率
+    correct_rate = (correct / attempts * 100) if attempts > 0 else 0
+
+    return jsonify({
+        "disease": disease,
+        "attempts": attempts,
+        "correct": correct,
+        "correct_rate": round(correct_rate, 2)  # 保留两位小数
+    })
+
+@app.route('/api/current_game_stats/<game_id>', methods=['GET'])
+def get_current_game_stats(game_id):
+    """获取当前游戏的疾病统计数据（不显示疾病名称）"""
+    if game_id not in active_games:
+        return jsonify({"error": "Game not found"}), 404
+
+    # 获取当前游戏的疾病
+    current_disease = active_games[game_id].get("diagnosis")
+    if not current_disease or current_disease not in disease_stats:
+        return jsonify({"error": "No statistics available"}), 404
+
+    stats = disease_stats[current_disease]
+    attempts = stats["attempts"]
+    correct = stats["correct"]
+
+    # 计算正确率
+    correct_rate = (correct / attempts * 100) if attempts > 0 else 0
+
+    return jsonify({
+        "attempts": attempts,
+        "correct": correct,
+        "correct_rate": round(correct_rate, 2)  # 保留两位小数
     })
 
 if __name__ == '__main__':

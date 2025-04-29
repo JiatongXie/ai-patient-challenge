@@ -347,6 +347,7 @@ function App() {
         isLoading={isLoading}
         currentSender={currentSender}
         gameStarted={gameStarted}
+        gameId={gameId}
       />
 
       {!gameStarted ? (

@@ -13,3 +13,4 @@ frontend/package-lock.json
 .env2
 api_logs/
 **/.pytest_cache/
+disease_stats.json

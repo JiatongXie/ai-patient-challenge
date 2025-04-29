@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import styled from "styled-components";
+import axios from "axios";
 
 const HeaderContainer = styled.div`
   padding: 12px 16px;
@@ -28,6 +29,46 @@ const GithubLink = styled.a`
 
   &:hover {
     opacity: 1;
+  }
+`;
+
+const InfoIcon = styled.div`
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: white;
+  font-size: 18px;
+  opacity: 0.9;
+  cursor: pointer;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 1;
+  }
+`;
+
+const StatsPopup = styled.div`
+  position: absolute;
+  top: 100%;
+  left: 16px;
+  background-color: white;
+  color: #333;
+  padding: 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+  text-align: left;
+  min-width: 200px;
+
+  h4 {
+    margin: 0 0 8px 0;
+    color: #07c160;
+  }
+
+  p {
+    margin: 4px 0;
+    font-size: 14px;
   }
 `;
 
@@ -88,10 +129,88 @@ const GameHeader = ({
   isLoading,
   currentSender,
   gameStarted,
+  gameId,
 }) => {
+  const [showStats, setShowStats] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // 获取当前游戏的疾病统计数据
+  const fetchStats = async () => {
+    if (!gameId) return;
+
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/current_game_stats/${gameId}`);
+      setStats(response.data);
+    } catch (error) {
+      console.error("获取统计数据失败:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 处理信息图标点击
+  const handleInfoClick = () => {
+    if (showStats) {
+      setShowStats(false);
+    } else {
+      setShowStats(true);
+      fetchStats();
+    }
+  };
+
+  // 点击其他地方关闭统计弹窗
+  const handleClickOutside = (e) => {
+    if (
+      showStats &&
+      !e.target.closest(".stats-popup") &&
+      !e.target.closest(".info-icon")
+    ) {
+      setShowStats(false);
+    }
+  };
+
+  // 添加点击事件监听器
+  React.useEffect(() => {
+    if (showStats) {
+      document.addEventListener("click", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, [showStats]);
+
   return (
     <HeaderContainer>
       <Title>AI问诊小游戏</Title>
+
+      {gameStarted && (
+        <InfoIcon
+          onClick={handleInfoClick}
+          className="info-icon"
+          title="查看统计数据"
+        >
+          <i className="fas fa-info-circle"></i>
+        </InfoIcon>
+      )}
+
+      {showStats && (
+        <StatsPopup className="stats-popup">
+          <h4>当前疾病全服统计</h4>
+          {loading ? (
+            <p>加载中...</p>
+          ) : stats ? (
+            <>
+              <p>今日尝试次数: {stats.attempts}</p>
+              <p>正确回答次数: {stats.correct}</p>
+              <p>正确率: {stats.correct_rate}%</p>
+            </>
+          ) : (
+            <p>暂无统计数据</p>
+          )}
+        </StatsPopup>
+      )}
 
       <GithubLink
         href="https://github.com/metrovoc/ai-patient-challenge"
