@@ -773,8 +773,13 @@ def system_node(state: GameState, game_id=None) -> Dict:
                 if not fixed_content.strip():
                     fixed_content = "医生，我想再详细说明一下我的症状，我确实感到不舒服，但很难用专业术语描述。"
 
-                # 再次清理询问身体内容
-                fixed_content = re.sub(r'\[询问身体:.*?\]', '', fixed_content).strip()
+                # 再次清理询问身体内容和特殊格式
+                # 匹配[询问身体:xxx]格式，包括可能的空格和换行
+                fixed_content = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', fixed_content)
+                # 匹配旧格式[询问身体]
+                fixed_content = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', fixed_content)
+                # 去除可能的多余空格
+                fixed_content = fixed_content.strip()
 
                 # 创建修正后的消息，替换原来的消息
                 fixed_message = {"sender": "patient", "content": fixed_content}
