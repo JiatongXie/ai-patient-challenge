@@ -628,8 +628,40 @@ def system_node(state: GameState, game_id=None) -> Dict:
 """
             diagnosis_result = invoke_llm(diagnosis_prompt, "你是医学诊断评估专家，判断医生的诊断是否与标准诊断匹配。", game_id)
 
-            # 解析诊断结果
+            # 解析诊断结果 - 使用更鲁棒的方法
+            # 1. 首先尝试精确匹配标准格式
             is_correct_diagnosis = "诊断正确: 是" in diagnosis_result
+
+            # 2. 如果没有精确匹配，尝试更宽松的匹配
+            if not is_correct_diagnosis:
+                import re
+                # 匹配"诊断正确"或"正确诊断"等相关表述后跟着肯定词
+                correct_patterns = [
+                    r'诊断正确\s*[:：]?\s*(是|正确|对|没错|确实|肯定)',
+                    r'正确诊断\s*[:：]?\s*(是|正确|对|没错|确实|肯定)',
+                    r'诊断(是|正确|对|没错|确实|肯定)(正确|对|没错)',
+                    r'医生(正确|准确)地?诊断',
+                    r'医生的诊断是正确的',
+                    r'诊断结果(正确|准确|符合)',
+                    r'(正确|准确)地?判断出了?疾病'
+                ]
+
+                # 匹配否定表述
+                incorrect_patterns = [
+                    r'诊断正确\s*[:：]?\s*(否|不正确|不对|错误|不准确)',
+                    r'诊断不正确',
+                    r'诊断错误',
+                    r'没有正确诊断',
+                    r'医生没有(正确|准确)诊断',
+                    r'医生的诊断(不正确|不准确|有误|错误)'
+                ]
+
+                # 先检查是否有明确的否定表述
+                has_negative = any(re.search(pattern, diagnosis_result, re.IGNORECASE) for pattern in incorrect_patterns)
+
+                # 如果没有否定表述，再检查是否有肯定表述
+                if not has_negative:
+                    is_correct_diagnosis = any(re.search(pattern, diagnosis_result, re.IGNORECASE) for pattern in correct_patterns)
             if is_correct_diagnosis:
                 return {
                     "messages": messages + [{"sender": "system", "content": f"恭喜！你正确诊断出了病人的疾病：{diagnosis}。"}],
@@ -680,8 +712,40 @@ def system_node(state: GameState, game_id=None) -> Dict:
             # 获取系统判断
             system_response = invoke_llm(prompt, SYSTEM_REFEREE_MESSAGE + f"\n正确的诊断是：{diagnosis}", game_id)
 
-            # 解析系统回复
+            # 解析系统回复 - 使用更鲁棒的方法
+            # 1. 首先尝试精确匹配标准格式
             is_reasonable = "符合要求: 是" in system_response
+
+            # 2. 如果没有精确匹配，尝试更宽松的匹配
+            if not is_reasonable:
+                import re
+                # 匹配"符合要求"或"符合规则"或"合理"等相关表述后跟着肯定词
+                reasonable_patterns = [
+                    r'符合要求\s*[:：]?\s*(是|正确|合理|可以|没问题|通过)',
+                    r'符合规则\s*[:：]?\s*(是|正确|合理|可以|没问题|通过)',
+                    r'合理性\s*[:：]?\s*(是|正确|合理|可以|没问题|通过)',
+                    r'(合理|正确|恰当|适当)\s*[:：]?\s*(是|正确|合理|可以|没问题|通过)',
+                    r'回复(合理|正确|恰当|适当)',
+                    r'没有问题',
+                    r'可以接受'
+                ]
+
+                # 匹配否定表述
+                unreasonable_patterns = [
+                    r'符合要求\s*[:：]?\s*(否|不正确|不合理|不可以|有问题|不通过)',
+                    r'不符合要求',
+                    r'不合理',
+                    r'有问题',
+                    r'不恰当',
+                    r'不适当'
+                ]
+
+                # 先检查是否有明确的否定表述
+                has_negative = any(re.search(pattern, system_response, re.IGNORECASE) for pattern in unreasonable_patterns)
+
+                # 如果没有否定表述，再检查是否有肯定表述
+                if not has_negative:
+                    is_reasonable = any(re.search(pattern, system_response, re.IGNORECASE) for pattern in reasonable_patterns)
 
             if not is_reasonable:
                 # 病人消息不合理，需要重新生成
