@@ -213,6 +213,14 @@ def new_game():
     print(f"创建新游戏成功，请求ID: {request_id}, 游戏ID: {game_id}")
     return jsonify(response)
 
+@app.route('/api/get_config', methods=['GET'])
+def get_config():
+    """获取游戏配置信息"""
+    # 返回前端需要的配置信息
+    return jsonify({
+        "max_input_length": GAME_CONFIG["max_input_length"]
+    })
+
 @app.route('/api/send_message', methods=['POST'])
 def send_message():
     """发送消息"""
@@ -222,6 +230,11 @@ def send_message():
 
     if not game_id or not message or game_id not in active_games:
         return jsonify({"error": "Invalid request"}), 400
+
+    # 检查消息长度是否超过限制
+    max_length = GAME_CONFIG["max_input_length"]
+    if len(message) > max_length:
+        return jsonify({"error": f"消息长度超过限制（最大{max_length}字）"}), 400
 
     # 获取当前游戏状态
     current_state = active_games[game_id]

@@ -23,6 +23,9 @@ GAME_CONFIG = {
         "高血压", "糖尿病", "关节炎", "哮喘", "过敏性鼻炎"
     ],
 
+    # 用户输入最大字数限制
+    "max_input_length": int(os.getenv("MAX_INPUT_LENGTH", "100")),
+
     # API相关配置
     "api": {
         "base_url": os.getenv("API_BASE_URL"),

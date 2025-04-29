@@ -3,9 +3,15 @@ import styled from "styled-components";
 
 const InputContainer = styled.div`
   display: flex;
+  flex-direction: column;
   padding: 10px;
   background-color: #f5f5f5;
   border-top: 1px solid #e0e0e0;
+`;
+
+const InputRow = styled.div`
+  display: flex;
+  width: 100%;
 `;
 
 const TextArea = styled.textarea`
@@ -52,12 +58,20 @@ const SendButton = styled.button`
   }
 `;
 
-const MessageInput = ({ onSendMessage, disabled }) => {
+const CharCounter = styled.div`
+  text-align: right;
+  font-size: 12px;
+  color: ${(props) => (props.isExceeded ? "#ff4d4f" : "#999")};
+  margin-top: 4px;
+  padding-right: 5px;
+`;
+
+const MessageInput = ({ onSendMessage, disabled, maxLength = 100 }) => {
   const [message, setMessage] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (message.trim() && !disabled) {
+    if (message.trim() && !disabled && message.length <= maxLength) {
       onSendMessage(message);
       setMessage("");
     }
@@ -70,18 +84,34 @@ const MessageInput = ({ onSendMessage, disabled }) => {
     }
   };
 
+  const handleChange = (e) => {
+    const value = e.target.value;
+    setMessage(value);
+  };
+
+  const isExceeded = message.length > maxLength;
+
   return (
     <InputContainer>
-      <TextArea
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={disabled ? "等待病人回复..." : "输入诊断或提问..."}
-        disabled={disabled}
-      />
-      <SendButton onClick={handleSubmit} disabled={disabled || !message.trim()}>
-        发送
-      </SendButton>
+      <InputRow>
+        <TextArea
+          value={message}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          placeholder={disabled ? "等待病人回复..." : "输入诊断或提问..."}
+          disabled={disabled}
+          maxLength={maxLength * 2} // 允许输入超过限制，但不能发送
+        />
+        <SendButton
+          onClick={handleSubmit}
+          disabled={disabled || !message.trim() || isExceeded}
+        >
+          发送
+        </SendButton>
+      </InputRow>
+      <CharCounter isExceeded={isExceeded}>
+        {message.length}/{maxLength} 字
+      </CharCounter>
     </InputContainer>
   );
 };
