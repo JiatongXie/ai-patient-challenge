@@ -357,14 +357,24 @@ def patient_node(state: GameState, game_id=None) -> Dict:
         # 构造特殊提示，帮助病人基于身体感知回复医生
         body_response = last_message["content"]
 
+        # 格式化完整的对话历史，排除身体消息
+        formatted_messages = []
+        for msg in messages:
+            if msg["sender"] != "body":
+                formatted_messages.append(f"{msg['sender']}: {msg['content']}")
+        formatted_history = "\n".join(formatted_messages)
+
         special_prompt = f"""
 你是一位病人，刚才询问了自己的身体感受，得到了以下反馈:
 
 {body_response}
 
+完整的对话历史:
+{formatted_history}
+
 医生最近的问题或回复是: "{doctor_question}"
 
-请基于这些身体感受，以病人的身份回复医生。你的回复必须：
+请基于这些身体感受和完整的对话历史，以病人的身份回复医生。你的回复必须：
 1. 回应医生的问题（如果有）
 2. 简短直接，只描述症状，不包含医学诊断
 3. 使用普通人的语言，避免专业术语
@@ -373,6 +383,7 @@ def patient_node(state: GameState, game_id=None) -> Dict:
 6. 不要复述全部身体反馈，只选择与医生问题相关的症状
 7. 确保你的回复有实际内容，不能为空
 8. 不要在回复中包含任何[询问身体:xxx]格式的内容
+9. 保持与之前对话的连贯性
 """
         content = invoke_llm(special_prompt, PATIENT_SYSTEM_MESSAGE, game_id)
 
