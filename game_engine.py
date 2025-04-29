@@ -236,38 +236,18 @@ def save_api_log(log_data, game_id=None, call_id=None, timestamp=None):
 
 # 病人角色
 patient_prompt = PromptTemplate.from_template("""
-你是一位去医院就诊的病人。你不知道自己得了什么病，但你能感受到身体的症状。
-你需要向医生描述你的症状，并回答医生的问题。
-
 当前对话历史:
 {messages}
-
-请以病人的身份回复医生的问题或发起对话。
-
-如果你想了解更多身体症状，你可以使用特殊格式"[询问身体:具体的问题]"来询问自己的身体感受。
-重要规则：
-1. 如果你决定询问身体，你的输出应该只包含询问身体的内容，不要在同一条消息中既回复医生又询问身体
-2. 询问身体结束后，你会收到身体的反馈，然后再基于这些反馈回复医生
 """)
 
 # 身体角色
 body_prompt = PromptTemplate.from_template("""
-你代表病人的身体感官系统。你知道病人得了{diagnosis}，但你只能提供相关的症状感受，不能直接说出疾病名称。
-
-当前对话历史:
-{messages}
-
-病人正在询问自己的身体感受，请使用简洁的要点形式描述与{diagnosis}相关的症状。
-不要使用对话格式，不要称呼医生或病人，只需直接描述症状感受。
+病人的疾病:{diagnosis}
+当前对话历史:{messages}
 """)
 
 # 系统角色
 system_prompt = PromptTemplate.from_template("""
-你是问诊游戏的系统，负责判断游戏是否结束，以及检查各方回复的格式。你的输出要简短并遵循格式。
-
-当前对话历史:
-{messages}
-
 当前消息: {current_message}
 发送者: {sender}
 
@@ -288,19 +268,14 @@ PATIENT_SYSTEM_MESSAGE = """
 请真实地扮演一个病人，使用自然的语言描述自己的症状。
 回复应当简洁、符合病人的身份，避免过于专业的医学术语。
 
-当你需要了解更多自己的身体状况时，你可以询问身体。在这种情况下，请使用特殊格式：
-"[询问身体:你的具体问题]"
-例如：
-"[询问身体:我的头痛是什么感觉？]"
-"[询问身体:我的胃痛是持续性的还是间歇性的？]"
+必须了解更多自己的身体状况时，你可以先询问身体
 
 重要规则：
 1. 你不知道自己的疾病名称
 2. 你只知道自己的感受和症状
 3. 如果医生说出疾病名称，你不会知道它是否正确
-4. 如果你决定询问身体，你的回复应该使用特殊格式，只包含询问身体的内容，不要在同一条消息中既回复医生又询问身体
-5. 询问身体后，你将获得更准确的症状描述，你需要将这些症状自然地融入到对医生的回复中
-6. 你的回复应当简短直接（最多1句话）
+4. 如果你决定询问身体而不回答医生的问题，你的回复必须使用"[询问身体:你的具体问题]"
+5. 你的回复应当简短直接（最多1句话）
 
 """
 
@@ -357,14 +332,24 @@ def patient_node(state: GameState, game_id=None) -> Dict:
         # 构造特殊提示，帮助病人基于身体感知回复医生
         body_response = last_message["content"]
 
+        # 格式化完整的对话历史，排除身体消息
+        formatted_messages = []
+        for msg in messages:
+            if msg["sender"] != "body":
+                formatted_messages.append(f"{msg['sender']}: {msg['content']}")
+        formatted_history = "\n".join(formatted_messages)
+
         special_prompt = f"""
 你是一位病人，刚才询问了自己的身体感受，得到了以下反馈:
 
 {body_response}
 
+完整的对话历史:
+{formatted_history}
+
 医生最近的问题或回复是: "{doctor_question}"
 
-请基于这些身体感受，以病人的身份回复医生。你的回复必须：
+请基于这些身体感受和完整的对话历史，以病人的身份回复医生。你的回复必须：
 1. 回应医生的问题（如果有）
 2. 简短直接，只描述症状，不包含医学诊断
 3. 使用普通人的语言，避免专业术语
@@ -373,6 +358,7 @@ def patient_node(state: GameState, game_id=None) -> Dict:
 6. 不要复述全部身体反馈，只选择与医生问题相关的症状
 7. 确保你的回复有实际内容，不能为空
 8. 不要在回复中包含任何[询问身体:xxx]格式的内容
+9. 保持与之前对话的连贯性
 """
         content = invoke_llm(special_prompt, PATIENT_SYSTEM_MESSAGE, game_id)
 
@@ -500,8 +486,7 @@ def get_initial_symptoms(diagnosis: str, game_id=None) -> str:
 请确保症状描述：
 1. 典型且明显，能够引导医生进行诊断
 2. 不要直接透露疾病名称
-3. 使用简洁的要点形式
-4. 包含2-4个主要症状
+3. 使用简洁的要点形式,输出尽量少
 """
 
     # 获取身体回复
@@ -700,7 +685,6 @@ def system_node(state: GameState, game_id=None) -> Dict:
             # 构建提示
             formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages[:-1]])
             prompt = system_prompt.format(
-                messages=formatted_messages,
                 current_message=current_message["content"],
                 sender=current_message["sender"],
                 diagnosis=diagnosis
@@ -748,12 +732,10 @@ def system_node(state: GameState, game_id=None) -> Dict:
                 # 病人消息不合理，需要重新生成
                 # 创建一个特殊提示来生成更合理的病人回复
                 fix_prompt = f"""
-前一条病人消息被系统判断为不合理，原因是: {system_response}
+前一条病人消息被系统判断为不合理，系统的回复是:{system_response}
 
 请根据以下对话历史，生成一个新的合理病人回复:
 {formatted_messages}
-
-问题原因总结: {system_response}
 
 重新以病人身份回复，确保:
 1. 不透露疾病名称
