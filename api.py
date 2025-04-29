@@ -86,10 +86,10 @@ def auto_save_conversation(game_id):
                 # 复制消息以避免修改原始状态
                 new_msg = msg.copy()
                 # 清理询问身体内容，使用更严格的正则表达式
-                # 匹配[询问身体:xxx]格式，包括可能的空格和换行
-                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', new_msg["content"])
+                # 匹配[询问身体:xxx]或[询问身体：xxx]格式，包括可能的空格和换行，同时支持中英文冒号
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*[：:]\s*.*?\]\s*', '', new_msg["content"])
                 # 匹配旧格式[询问身体]
-                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', new_msg["content"])
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*[：:]?\s*', '', new_msg["content"])
                 # 去除可能的多余空格
                 new_msg["content"] = new_msg["content"].strip()
                 messages_to_save.append(new_msg)
@@ -169,10 +169,10 @@ def new_game():
     for i, msg in enumerate(patient_state["messages"]):
         if msg["sender"] == "patient":
             # 清理可能的询问身体内容，使用更严格的正则表达式
-            # 匹配[询问身体:xxx]格式，包括可能的空格和换行
-            cleaned_content = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', msg["content"])
+            # 匹配[询问身体:xxx]或[询问身体：xxx]格式，包括可能的空格和换行，同时支持中英文冒号
+            cleaned_content = re.sub(r'\s*\[\s*询问身体\s*[：:]\s*.*?\]\s*', '', msg["content"])
             # 匹配旧格式[询问身体]
-            cleaned_content = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', cleaned_content)
+            cleaned_content = re.sub(r'\s*\[\s*询问身体\s*\]\s*[：:]?\s*', '', cleaned_content)
             # 去除可能的多余空格
             cleaned_content = cleaned_content.strip()
 
@@ -331,14 +331,14 @@ def send_message():
 
         if last_patient_msg:
             # 提取询问身体的内容（使用更严格的格式匹配）
-            # 匹配[询问身体:xxx]格式，包括可能的空格和换行
-            inquiry_match = re.search(r'\s*\[\s*询问身体\s*:\s*(.*?)\]\s*', last_patient_msg["content"])
+            # 匹配[询问身体:xxx]或[询问身体：xxx]格式，包括可能的空格和换行，同时支持中英文冒号
+            inquiry_match = re.search(r'\s*\[\s*询问身体\s*[：:]\s*(.*?)\]\s*', last_patient_msg["content"])
             if inquiry_match and inquiry_match.group(1).strip():
                 inquiry_content = inquiry_match.group(1).strip()
                 api_logs[game_id].append(f"患者询问身体: {inquiry_content}")
             else:
                 # 尝试匹配旧格式[询问身体]
-                old_format_match = re.search(r'\s*\[\s*询问身体\s*\]\s*:?\s*(.*)', last_patient_msg["content"])
+                old_format_match = re.search(r'\s*\[\s*询问身体\s*\]\s*[：:]?\s*(.*)', last_patient_msg["content"])
                 if old_format_match and old_format_match.group(1).strip():
                     inquiry_content = old_format_match.group(1).strip()
                     api_logs[game_id].append(f"患者询问身体: {inquiry_content}")
@@ -368,8 +368,8 @@ def send_message():
 
                 if new_patient_msg and new_patient_msg["content"].strip():
                     # 确保回复中不包含询问身体的内容
-                    clean_content = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', new_patient_msg["content"])
-                    clean_content = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', clean_content)
+                    clean_content = re.sub(r'\s*\[\s*询问身体\s*[：:]\s*.*?\]\s*', '', new_patient_msg["content"])
+                    clean_content = re.sub(r'\s*\[\s*询问身体\s*\]\s*[：:]?\s*', '', clean_content)
                     clean_content = clean_content.strip()
 
                     # 如果清理后内容为空，提供默认回复
@@ -418,10 +418,10 @@ def send_message():
                             # 复制消息以避免修改原始状态
                             new_msg = msg.copy()
                             # 清理询问身体内容，使用更严格的正则表达式
-                            # 匹配[询问身体:xxx]格式，包括可能的空格和换行
-                            new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', new_msg["content"])
+                            # 匹配[询问身体:xxx]或[询问身体：xxx]格式，包括可能的空格和换行，同时支持中英文冒号
+                            new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*[：:]\s*.*?\]\s*', '', new_msg["content"])
                             # 匹配旧格式[询问身体]
-                            new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', new_msg["content"])
+                            new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*[：:]?\s*', '', new_msg["content"])
                             # 去除可能的多余空格
                             new_msg["content"] = new_msg["content"].strip()
                             messages_to_return.append(new_msg)
@@ -480,10 +480,10 @@ def send_message():
                 # 复制消息以避免修改原始状态
                 new_msg = msg.copy()
                 # 清理询问身体内容，使用更严格的正则表达式
-                # 匹配[询问身体:xxx]格式，包括可能的空格和换行
-                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', new_msg["content"])
+                # 匹配[询问身体:xxx]或[询问身体：xxx]格式，包括可能的空格和换行，同时支持中英文冒号
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*[：:]\s*.*?\]\s*', '', new_msg["content"])
                 # 匹配旧格式[询问身体]
-                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', new_msg["content"])
+                new_msg["content"] = re.sub(r'\s*\[\s*询问身体\s*\]\s*[：:]?\s*', '', new_msg["content"])
                 # 去除可能的多余空格
                 new_msg["content"] = new_msg["content"].strip()
                 messages_to_return.append(new_msg)
