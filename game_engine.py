@@ -568,7 +568,7 @@ def body_node(state: GameState, game_id=None) -> Dict:
     }
 
 def system_node(state: GameState, game_id=None) -> Dict:
-    """系统节点，负责检查消息合理性和游戏状态"""
+    """系统节点，负责检查消息格式和游戏状态"""
     messages = state["messages"]
     diagnosis = state["diagnosis"]
 
@@ -639,18 +639,18 @@ def system_node(state: GameState, game_id=None) -> Dict:
                     "system_notes": diagnosis_result  # 保存系统的思考过程
                 }
 
-    # 对于医生消息，无需进行合理性检查，直接返回
+    # 对于医生消息，直接返回
     if current_message["sender"] == "doctor":
-        # 医生（玩家）的消息不进行合理性评判，直接轮到病人回复
+        # 直接轮到病人回复
         return {
             "messages": messages,
             "current_sender": "patient",
             "diagnosis": diagnosis,
             "game_over": False,
-            "system_notes": "医生消息已接收，不进行合理性评判"  # 更新系统笔记
+            "system_notes": "医生消息已接收"  # 更新系统笔记
         }
 
-    # 只对病人消息进行合理性检查
+    # 只对病人消息进行格式检查
     if current_message["sender"] == "patient":
         # 检查是否为空消息
         if not current_message["content"].strip():
@@ -681,7 +681,7 @@ def system_node(state: GameState, game_id=None) -> Dict:
             system_response = invoke_llm(prompt, SYSTEM_REFEREE_MESSAGE + f"\n正确的诊断是：{diagnosis}", game_id)
 
             # 解析系统回复
-            is_reasonable = "符合要求：是" in system_response
+            is_reasonable = "符合要求: 是" in system_response
 
             if not is_reasonable:
                 # 病人消息不合理，需要重新生成
@@ -738,7 +738,7 @@ def system_node(state: GameState, game_id=None) -> Dict:
                 "current_sender": "doctor",
                 "diagnosis": diagnosis,
                 "game_over": False,
-                "system_notes": "跳过病人消息合理性检查（已禁用）"
+                "system_notes": "跳过病人消息格式检查（已禁用）"
             }
 
     # 其他情况，直接返回当前状态
