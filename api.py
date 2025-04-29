@@ -287,12 +287,14 @@ def send_message():
             # 匹配[询问身体:xxx]格式，包括可能的空格和换行
             inquiry_match = re.search(r'\s*\[\s*询问身体\s*:\s*(.*?)\]\s*', last_patient_msg["content"])
             if inquiry_match and inquiry_match.group(1).strip():
-                api_logs[game_id].append(f"患者询问身体: {inquiry_match.group(1).strip()}")
+                inquiry_content = inquiry_match.group(1).strip()
+                api_logs[game_id].append(f"患者询问身体: {inquiry_content}")
             else:
                 # 尝试匹配旧格式[询问身体]
                 old_format_match = re.search(r'\s*\[\s*询问身体\s*\]\s*:?\s*(.*)', last_patient_msg["content"])
                 if old_format_match and old_format_match.group(1).strip():
-                    api_logs[game_id].append(f"患者询问身体: {old_format_match.group(1).strip()}")
+                    inquiry_content = old_format_match.group(1).strip()
+                    api_logs[game_id].append(f"患者询问身体: {inquiry_content}")
 
             # 调用身体节点
             body_state = body_node(patient_state, game_id)
@@ -318,7 +320,17 @@ def send_message():
                         break
 
                 if new_patient_msg and new_patient_msg["content"].strip():
-                    api_logs[game_id].append(f"患者基于身体感知的回复: {new_patient_msg['content']}")
+                    # 确保回复中不包含询问身体的内容
+                    clean_content = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', new_patient_msg["content"])
+                    clean_content = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', clean_content)
+                    clean_content = clean_content.strip()
+
+                    # 如果清理后内容为空，提供默认回复
+                    if not clean_content:
+                        clean_content = "医生，我感觉症状确实比较明显，您能给我一些建议吗？"
+                        new_patient_msg["content"] = clean_content
+
+                    api_logs[game_id].append(f"患者基于身体感知的回复: {clean_content}")
 
                 # 系统验证最终的病人消息
                 final_state = system_node(final_patient_state, game_id)

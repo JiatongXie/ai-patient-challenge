@@ -242,8 +242,12 @@ patient_prompt = PromptTemplate.from_template("""
 当前对话历史:
 {messages}
 
-请以病人的身份回复医生的问题或发起对话。如果你想了解更多身体症状，你可以使用特殊格式"[询问身体:具体的问题]"来询问自己的身体感受。
-但请注意，医生回复你后，不要直接询问身体，你应该先回复医生的问题。
+请以病人的身份回复医生的问题或发起对话。
+
+如果你想了解更多身体症状，你可以使用特殊格式"[询问身体:具体的问题]"来询问自己的身体感受。
+重要规则：
+1. 如果你决定询问身体，你的输出应该只包含询问身体的内容，不要在同一条消息中既回复医生又询问身体
+2. 询问身体结束后，你会收到身体的反馈，然后再基于这些反馈回复医生
 """)
 
 # 身体角色
@@ -286,7 +290,7 @@ PATIENT_SYSTEM_MESSAGE = """
 请真实地扮演一个病人，使用自然的语言描述自己的症状。
 回复应当简洁、符合病人的身份，避免过于专业的医学术语。
 
-当你需要了解更多自己的身体状况时，你可以询问身体。在这种情况下，请使用格式：
+当你需要了解更多自己的身体状况时，你可以询问身体。在这种情况下，请使用特殊格式：
 "[询问身体:你的具体问题]"
 例如：
 "[询问身体:我的头痛是什么感觉？]"
@@ -296,10 +300,10 @@ PATIENT_SYSTEM_MESSAGE = """
 1. 你不知道自己的疾病名称
 2. 你只知道自己的感受和症状
 3. 如果医生说出疾病名称，你不会知道它是否正确
-4. 询问身体后，你将获得更准确的症状描述，你需要将这些症状自然地融入到对医生的回复中
-5. 你的回复应当简短直接（最多4-5句话），不要包含询问身体的内容
-6. 医生回复你后，先回答医生的问题，不要马上询问身体
-7. 不要重复你之前提到过的症状，要根据当前对话进展回答
+4. 如果你决定询问身体，你的回复应该使用特殊格式，只包含询问身体的内容，不要在同一条消息中既回复医生又询问身体
+5. 询问身体后，你将获得更准确的症状描述，你需要将这些症状自然地融入到对医生的回复中
+6. 你的回复应当简短直接（最多2-3句话）
+
 """
 
 # 身体角色提示系统消息
@@ -339,6 +343,7 @@ SYSTEM_REFEREE_MESSAGE = """
 # 定义节点函数
 def patient_node(state: GameState, game_id=None) -> Dict:
     """病人节点，生成病人回复"""
+    import re
     messages = state["messages"]
     diagnosis = state.get("diagnosis", "")
 
@@ -366,19 +371,29 @@ def patient_node(state: GameState, game_id=None) -> Dict:
 
 请基于这些身体感受，以病人的身份回复医生。你的回复必须：
 1. 回应医生的问题（如果有）
-2. 简短直接，不超过4-5句话
+2. 简短直接，不超过2-3句话
 3. 只描述症状，不包含医学诊断
 4. 使用普通人的语言，避免专业术语
 5. 自然、真实地表达你的感受和担忧
 6. 不要提及你"询问身体"这一行为
 7. 不要复述全部身体反馈，只选择与医生问题相关的症状
 8. 确保你的回复有实际内容，不能为空
+9. 不要在回复中包含任何[询问身体:xxx]格式的内容
 """
         content = invoke_llm(special_prompt, PATIENT_SYSTEM_MESSAGE, game_id)
 
         # 确保内容不为空
         if not content.strip():
             content = "医生，我最近感觉身体确实不太舒服，具体症状有点复杂，能否请您详细问诊？"
+
+        # 再次检查并清理可能的询问身体内容
+        content = re.sub(r'\s*\[\s*询问身体\s*:\s*.*?\]\s*', '', content)
+        content = re.sub(r'\s*\[\s*询问身体\s*\]\s*:?\s*', '', content)
+        content = content.strip()
+
+        # 如果清理后内容为空，提供默认回复
+        if not content.strip():
+            content = "医生，根据我的感受，症状确实比较明显。您能给我一些建议吗？"
 
         # 创建病人消息
         new_message = {"sender": "patient", "content": content}
@@ -426,11 +441,7 @@ def patient_node(state: GameState, game_id=None) -> Dict:
     if not content.strip():
         content = "医生，我能再详细说明一下我的症状吗？"
 
-    # 更新状态
-    new_message = {"sender": "patient", "content": content}
-
     # 检查是否需要询问身体 - 使用更严格的格式匹配
-    import re
     # 匹配[询问身体:xxx]格式，包括可能的空格和换行
     inquiry_match = re.search(r'\s*\[\s*询问身体\s*:\s*(.*?)\]\s*', content)
 
@@ -449,14 +460,23 @@ def patient_node(state: GameState, game_id=None) -> Dict:
             "game_over": False
         }
     elif inquiry_match and inquiry_match.group(1).strip():  # 确保询问内容不为空
+        # 当检测到询问身体时，只处理询问身体的部分，不生成对医生的回复
+        # 提取询问内容
+        inquiry_content = inquiry_match.group(1).strip()
+
+        # 创建只包含询问身体内容的消息
+        inquiry_message = {"sender": "patient", "content": f"[询问身体:{inquiry_content}]"}
+
+        # 直接进入body节点，不生成对医生的回复
         return {
-            "messages": messages + [new_message],
+            "messages": messages + [inquiry_message],
             "current_sender": "body",
             "diagnosis": diagnosis,
             "game_over": False
         }
     else:
         # 不询问身体，直接进入系统检查
+        new_message = {"sender": "patient", "content": content}
         return {
             "messages": messages + [new_message],
             "current_sender": "system",
@@ -504,6 +524,7 @@ def get_initial_symptoms(diagnosis: str, game_id=None) -> str:
 
 def body_node(state: GameState, game_id=None) -> Dict:
     """身体节点，生成身体感官响应"""
+    import re
     messages = state["messages"]
     diagnosis = state.get("diagnosis", "")
 
@@ -511,7 +532,6 @@ def body_node(state: GameState, game_id=None) -> Dict:
     patient_message = messages[-1]["content"]
 
     # 提取方括号内的内容，使用更严格的正则表达式
-    import re
     # 匹配[询问身体:xxx]格式，包括可能的空格和换行
     inquiry_match = re.search(r'\s*\[\s*询问身体\s*:\s*(.*?)\]\s*', patient_message)
 
@@ -682,7 +702,7 @@ def system_node(state: GameState, game_id=None) -> Dict:
 2. 只描述症状、感受
 3. 使用普通人能理解的语言
 4. 移除任何[询问身体]的标记
-5. 回复简短直接，不超过4-5句话
+5. 回复简短直接，不超过2-3句话
 6. 确保回复有实际内容，不能为空
 """
                 # 生成修正后的病人回复
