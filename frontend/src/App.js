@@ -92,8 +92,25 @@ function App() {
   const [diagnosis, setDiagnosis] = useState("");
   const [error, setError] = useState("");
   const [gameStarted, setGameStarted] = useState(false);
+  const [gameConfig, setGameConfig] = useState({
+    max_input_length: 100, // 默认值
+  });
 
   const chatContainerRef = useRef(null);
+
+  // 获取游戏配置
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const response = await api.get("/api/get_config");
+        setGameConfig(response.data);
+      } catch (err) {
+        console.error("获取配置失败:", err);
+      }
+    };
+
+    fetchConfig();
+  }, []);
 
   // 创建新游戏
   const startNewGame = async () => {
@@ -380,6 +397,7 @@ function App() {
           <MessageInput
             onSendMessage={sendMessage}
             disabled={isLoading || gameOver || currentSender !== "doctor"}
+            maxLength={gameConfig.max_input_length}
           />
 
           <GameControls
