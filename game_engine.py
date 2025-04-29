@@ -248,7 +248,6 @@ body_prompt = PromptTemplate.from_template("""
 
 # 系统角色
 system_prompt = PromptTemplate.from_template("""
-当前对话历史:{messages}
 当前消息: {current_message}
 发送者: {sender}
 
@@ -691,7 +690,6 @@ def system_node(state: GameState, game_id=None) -> Dict:
             # 构建提示
             formatted_messages = "\n".join([f"{msg['sender']}: {msg['content']}" for msg in messages[:-1]])
             prompt = system_prompt.format(
-                messages=formatted_messages,
                 current_message=current_message["content"],
                 sender=current_message["sender"],
                 diagnosis=diagnosis
