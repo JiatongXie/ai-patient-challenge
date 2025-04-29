@@ -151,7 +151,8 @@ def new_game():
         "messages": [{"sender": "system", "content": "游戏开始，请为来到诊室的病人诊断病情"}],
         "current_sender": "patient",
         "diagnosis": diagnosis,
-        "game_over": False
+        "game_over": False,
+        "turn_count": 0  # 初始化对话轮数计数
     }
 
     # 存储游戏状态
@@ -187,7 +188,8 @@ def new_game():
         "messages": system_checked_state["messages"],
         "current_sender": "doctor",  # 轮到医生
         "diagnosis": diagnosis,
-        "game_over": False
+        "game_over": False,
+        "turn_count": 0  # 初始化对话轮数计数
     }
 
     # 自动保存对话
@@ -218,7 +220,8 @@ def get_config():
     """获取游戏配置信息"""
     # 返回前端需要的配置信息
     return jsonify({
-        "max_input_length": GAME_CONFIG["max_input_length"]
+        "max_input_length": GAME_CONFIG["max_input_length"],
+        "max_conversation_turns": GAME_CONFIG["max_conversation_turns"]
     })
 
 @app.route('/api/send_message', methods=['POST'])
@@ -247,12 +250,37 @@ def send_message():
     if current_state.get("current_sender") != "doctor":
         return jsonify({"error": "Not doctor's turn"}), 400
 
+    # 获取当前对话轮数
+    current_turn_count = current_state.get("turn_count", 0)
+
+    # 检查是否达到对话轮数限制
+    max_turns = GAME_CONFIG["max_conversation_turns"]
+    if current_turn_count >= max_turns:
+        # 添加系统消息，通知对话轮数已达上限
+        limit_message = {"sender": "system", "content": f"对话已达到{max_turns}轮上限，游戏结束。"}
+        active_games[game_id]["messages"].append(limit_message)
+        active_games[game_id]["game_over"] = True
+
+        # 自动保存对话
+        auto_save_conversation(game_id)
+
+        return jsonify({
+            "messages": [msg for msg in active_games[game_id]["messages"] if msg["sender"] != "body"],
+            "current_sender": "system",
+            "game_over": True,
+            "diagnosis": current_state.get("diagnosis")
+        })
+
+    # 增加对话轮数计数
+    new_turn_count = current_turn_count + 1
+
     # 添加医生消息
     doctor_state = {
         "messages": current_state["messages"] + [{"sender": "doctor", "content": message}],
         "current_sender": "system",
         "diagnosis": current_state.get("diagnosis"),
-        "game_over": current_state.get("game_over", False)
+        "game_over": current_state.get("game_over", False),
+        "turn_count": new_turn_count  # 更新对话轮数
     }
 
     # 系统检查消息
@@ -260,6 +288,8 @@ def send_message():
 
     # 检查游戏是否结束
     if system_state.get("game_over", False):
+        # 保留对话轮数计数
+        system_state["turn_count"] = new_turn_count
         active_games[game_id] = system_state
 
         # 自动保存对话
@@ -275,6 +305,8 @@ def send_message():
 
     # 如果不是病人回合，直接返回系统状态
     if system_state.get("current_sender") != "patient":
+        # 保留对话轮数计数
+        system_state["turn_count"] = new_turn_count
         active_games[game_id] = system_state
         return jsonify({
             "messages": [msg for msg in system_state["messages"] if msg["sender"] != "body"],
@@ -283,6 +315,8 @@ def send_message():
         })
 
     # 病人回合 - 生成病人回复
+    # 保留对话轮数计数
+    system_state["turn_count"] = new_turn_count
     patient_state = patient_node(system_state, game_id)
 
     # 检查患者是否询问身体
@@ -366,6 +400,9 @@ def send_message():
                     api_logs[game_id].append("警告：多次重试后基于身体感知的回复仍未通过验证，强制设置为医生回合")
                     final_state["current_sender"] = "doctor"
 
+                # 确保保留对话轮数计数
+                if "turn_count" not in final_state and "turn_count" in doctor_state:
+                    final_state["turn_count"] = doctor_state["turn_count"]
                 # 更新游戏状态
                 active_games[game_id] = final_state
 
@@ -425,6 +462,9 @@ def send_message():
         api_logs[game_id].append("警告：多次重试后仍未通过验证，强制设置为医生回合")
         final_state["current_sender"] = "doctor"
 
+    # 确保保留对话轮数计数
+    if "turn_count" not in final_state and "turn_count" in doctor_state:
+        final_state["turn_count"] = doctor_state["turn_count"]
     # 更新游戏状态
     active_games[game_id] = final_state
 

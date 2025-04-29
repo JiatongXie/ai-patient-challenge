@@ -19,6 +19,7 @@ class GameState(TypedDict):
     current_sender: Literal["patient", "body", "doctor", "system"]  # 当前消息发送者
     diagnosis: Optional[str]  # 正确的诊断
     game_over: bool  # 游戏是否结束
+    turn_count: int  # 对话轮数计数
 
 # 创建OpenAI客户端
 client = OpenAI(

@@ -26,6 +26,9 @@ GAME_CONFIG = {
     # 用户输入最大字数限制
     "max_input_length": int(os.getenv("MAX_INPUT_LENGTH", "100")),
 
+    # 对话轮数限制
+    "max_conversation_turns": int(os.getenv("MAX_CONVERSATION_TURNS", "100")),
+
     # API相关配置
     "api": {
         "base_url": os.getenv("API_BASE_URL"),
